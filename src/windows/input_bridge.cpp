@@ -77,7 +77,11 @@ void raw(LPARAM l) {
     if(n==static_cast<UINT>(-1)||n<sizeof(RAWINPUTHEADER)) return;
     if(r.header.dwType==RIM_TYPEKEYBOARD) {
         const auto& k=r.data.keyboard;
-        if(k.VKey!=255) input(k.VKey,(k.Flags&RI_KEY_BREAK)==0);
+        unsigned key=k.VKey;
+        if(key==VK_LSHIFT||key==VK_RSHIFT) key=VK_SHIFT;
+        if(key==VK_LCONTROL||key==VK_RCONTROL) key=VK_CONTROL;
+        if(key==VK_LMENU||key==VK_RMENU) key=VK_MENU;
+        if(key!=255) input(key,(k.Flags&RI_KEY_BREAK)==0);
     } else if(r.header.dwType==RIM_TYPEMOUSE) {
         const auto flags=r.data.mouse.usButtonFlags;
         constexpr std::array<std::array<unsigned,3>,5> buttons{{
@@ -103,7 +107,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         CreateWindowW(L"BUTTON",L"Stop / release",WS_VISIBLE|WS_CHILD|BS_PUSHBUTTON,375,55,160,35,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(stop_id)),inst,nullptr);
         status=CreateWindowW(L"STATIC",L"Paused. Test here first. External target requires explicit selection.",WS_VISIBLE|WS_CHILD,15,105,625,65,w,nullptr,inst,nullptr);
         CreateWindowW(L"STATIC",L"Default: WASD / arrows, QERTF / Shift+QERTF, mouse buttons.\r\nChange bridge.profile and bridge.map, then restart.\r\nNo mouse aiming or game-specific skill mapping yet.\r\nSwitch to another window to disarm. Keyboard is not suppressed.",WS_VISIBLE|WS_CHILD,15,180,625,95,w,nullptr,inst,nullptr);
-        RAWINPUTDEVICE devices[2]{{1,6,RIDEV_INPUTSINK,w},{1,2,RIDEV_INPUTSINK,w}};
+        RAWINPUTDEVICE devices[2]{{1,6,RIDEV_INPUTSINK|RIDEV_DEVNOTIFY,w},{1,2,RIDEV_INPUTSINK|RIDEV_DEVNOTIFY,w}};
         if(!RegisterRawInputDevices(devices,2,sizeof(RAWINPUTDEVICE))) {std::cout<<"E301 Raw Input: "<<GetLastError()<<"\n";return -1;}
         focus_hook=SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,nullptr,focus_changed,0,0,WINEVENT_OUTOFCONTEXT);
         if(!focus_hook) {std::cout<<"E302 focus hook: "<<GetLastError()<<"\n";return -1;}
@@ -128,6 +132,9 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         return 0;
     case WM_INPUT:
         raw(lp);return DefWindowProcW(w,m,wp,lp);
+    case WM_INPUT_DEVICE_CHANGE:
+        if(armed && wp==GIDC_REMOVAL) stop(L"Paused: an input device disconnected. Re-arm manually.");
+        return 0;
     case WM_POWERBROADCAST:
         if(wp==PBT_APMSUSPEND) stop(L"Paused: suspend.");
         return TRUE;
@@ -165,6 +172,7 @@ int wmain(int argc,wchar_t** argv) {
     wchar_t file[MAX_PATH]{};
     std::filesystem::path dll;
     if(argc==2) dll=argv[1];
+    else if(std::filesystem::is_regular_file(folder/L"ViGEmClient.dll")) dll=folder/L"ViGEmClient.dll";
     else {
         OPENFILENAMEW dlg{};dlg.lStructSize=sizeof(dlg);dlg.lpstrFile=file;dlg.nMaxFile=MAX_PATH;
         dlg.lpstrFilter=L"ViGEmClient.dll\0ViGEmClient.dll\0";dlg.Flags=OFN_FILEMUSTEXIST|OFN_PATHMUSTEXIST|OFN_NOCHANGEDIR;
