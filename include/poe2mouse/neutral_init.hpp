@@ -7,8 +7,8 @@ template<class Send,class Wait>
 bool initialize_neutral(Send send,Wait wait) {
     PadReport sample{};
     sample.lx=1024;
-    const bool sent=send(sample);
-    const bool observed=sent&&wait(sample);
+    const bool prime_write_ok=send(sample);
+    const bool observed=prime_write_ok&&wait(sample);
     const bool reset=send(PadReport{});
     const bool neutral=reset&&wait(PadReport{});
     return observed&&neutral;
