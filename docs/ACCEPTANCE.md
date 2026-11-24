@@ -29,12 +29,14 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 
 - [ ] Office test: no game/driver; actionable guide, same-profile preview, Chinese edit/save/reject conflict, reserved native pause. Game UI compatibility matrix: NATIVE_UI.md.
 
-- [ ] After explicit device self-check, main-window real input test: hold P1 movement, P2 movement, independent button/chord, release, F10 pause, re-arm; observe actual XInput, not simulated state. Persistent mismatches pause and invalidate self-check. Short taps require separate timing tests.
+- [ ] After explicit device self-check, main-window real input test: hold P1 movement, P2 movement, independent button/chord, release, F10 pause, re-arm; observe actual XInput, not simulated state. Persistent mismatches pause and invalidate self-check. Short taps require separate timing tests. Office 0.1.16 user reports movement, buttons/chords, independent simultaneous inputs, release and F10 passed; re-arm not yet confirmed.
 
 - [ ] Dependency setup: existing DLL and service retained; clean installation downloads pinned artifacts, rejects hash/signature mismatch, extracts x64 DLL only, driver installer requires explicit consent, cleans own temp, detects policy/network errors, recheck succeeds. No game required; use approved test machine only.
 
 ## Office evidence 2026-11-24 / v0.1.16 (7c86d44)
 - [x] SDK/driver connection, two distinct observed XInput slots, exact neutral initialization.
 - [x] Explicit diagnostic sample for each controller, other controller remains neutral, restore neutral both PASS.
-- [ ] Physical keyboard/mouse to actual XInput live readback after self-check; pause/re-arm and cleanup in this build.
+- [x] Physical keyboard/mouse to actual XInput live readback after self-check, independent W+Up, Q/Shift+Q, left mouse/Shift+left mouse, all keys released neutral, F10 pause (user reports 9/9).
+- [ ] Re-arm, disconnect/reconnect, normal/forced exit cleanup in this build.
+- [ ] Compact keyboard: add Ctrl+WASD P2 chords via editor and test press/release order; existing keys latch until released.
 - [ ] Native game compatibility (all P0 game gates remain open).
