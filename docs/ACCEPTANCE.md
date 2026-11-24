@@ -47,3 +47,14 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 - [x] Two observed slots, exact neutral initialization, isolated diagnostic output and return to zero.
 - [x] E302-C blocks before self-check; local and external window arming and local re-arm reported PASS.
 - [ ] Verify external application's actual reception and focus-loss behavior; identify target application. Game acceptance remains open.
+
+
+## v0.1.18 hybrid controller MVP
+- [x] CI Windows/Linux core tests and Windows x64 package: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45414343127
+- [ ] Physical XInput pad detected before virtual devices; exactly one baseline device; physical slot remains distinct from P1/P2 virtual slots.
+- [ ] Left stick shared to both virtual devices with deadzone; right stick/buttons/triggers/D-pad route only to active role.
+- [ ] Back/View rising edge toggles active role once; held Back does not repeat and is not forwarded.
+- [ ] Keyboard P1-target bindings follow active role; explicit P2 modifier layer remains P2; key release stays latched to original role.
+- [ ] F10, focus loss, disconnect and normal exit restore both virtual devices to neutral.
+- [ ] HidHide manual setup: app whitelisted, physical pad hidden from game, virtual devices visible; game sees exactly two controllers.
+- [ ] PoE2 local co-op assignment and hot-switch behavior; no policy/compatibility claim before verification.

@@ -89,6 +89,9 @@ class Engine {
 public:
     using State=std::array<std::array<unsigned,action_count>,2>;
     void set_profile(const Profile& p) noexcept { reset(); profile_=p; }
+    void set_active_player(unsigned player) noexcept { if(player<2) active_player_=player; }
+    void set_follow_active(bool enabled) noexcept { follow_active_=enabled; }
+    [[nodiscard]] unsigned active_player() const noexcept { return active_player_; }
     void reset() noexcept { held_.fill(false); latched_={}; base_={}; shared_={}; state_={}; mods_=0; }
     bool input(unsigned key,bool down) noexcept {
         if(key>=key_count||held_[key]==down) return false;
@@ -98,6 +101,10 @@ public:
         if(down) {
             auto b=profile_.layers[bit?0:mods_][key];
             if(b.target==Target::none) b=profile_[key];
+            // In hybrid mode, ordinary P1 bindings follow the selected role.
+            // Explicit P2 modifier layers remain fixed P2 bindings.
+            if(follow_active_&&b.target==Target::p1)
+                b.target=active_player_==0?Target::p1:Target::p2;
             latched_[key]=b;
         }
         const auto b=latched_[key];
@@ -120,6 +127,7 @@ public:
 private:
     Profile profile_{}; std::array<bool,key_count> held_{};
     std::array<Binding,key_count> latched_{}; unsigned mods_{};
+    unsigned active_player_{}; bool follow_active_{};
     State base_{},state_{}; std::array<unsigned,4> shared_{};
 };
 }

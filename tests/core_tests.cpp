@@ -1,6 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/hybrid_controller.hpp"
 #include "poe2mouse/neutral_init.hpp"
 #include "poe2mouse/slot_identity.hpp"
 #include "poe2mouse/readback_monitor.hpp"
@@ -222,5 +223,50 @@ int main() {
     check(!initialize_neutral([&](PadReport r){++writes;last=r;return true;},
         [&](PadReport){++reads;return reads!=1;}),"prime mismatch does not pass");
     check(writes==2&&reads==2&&last==PadReport{},"reset attempted after mismatch");
+    // Hybrid physical controller: left stick is shared; other controls follow the selected role.
+    HybridController hybrid;
+    PhysicalPadState pad_state{};pad_state.lx=16000;pad_state.ly=0;pad_state.rx=12000;pad_state.ry=-4000;
+    pad_state.buttons=0x1000;pad_state.rt=180;
+    check(hybrid.update(pad_state,0x0020),"hybrid initial sample");
+    check(hybrid.active_player()==0,"hybrid defaults to P1");
+    check(hybrid.reports()[0].lx>0&&hybrid.reports()[1].lx>0,"hybrid left stick shared");
+    check(hybrid.reports()[0].buttons==0x1000&&hybrid.reports()[1].buttons==0,"hybrid buttons active role only");
+    check(hybrid.reports()[0].rt==180&&hybrid.reports()[1].rt==0,"hybrid trigger active role only");
+    check(hybrid.reports()[0].rx>0&&hybrid.reports()[1].rx==0,"hybrid right stick active role only");
+    pad_state.buttons=static_cast<std::uint16_t>(0x1000|0x0020);
+    check(hybrid.update(pad_state,0x0020)&&hybrid.active_player()==1,"hybrid role toggles on Back press");
+    check((hybrid.reports()[1].buttons&0x0020)==0&&hybrid.reports()[1].buttons==0x1000,"role toggle is consumed");
+    check(hybrid.reports()[0].buttons==0&&hybrid.reports()[1].buttons==0x1000,"buttons reroute to P2");
+    check(!hybrid.update(pad_state,0x0020)&&hybrid.active_player()==1,"held toggle does not repeat");
+    pad_state.buttons=0x1000;hybrid.update(pad_state,0x0020);
+    pad_state.buttons=static_cast<std::uint16_t>(0x1000|0x0020);hybrid.update(pad_state,0x0020);
+    check(hybrid.active_player()==0,"second Back press toggles P1");
+    hybrid.reset_inputs();check(hybrid.reports()[0]==PadReport{}&&hybrid.reports()[1]==PadReport{},"hybrid reset is neutral");
+    hybrid.reset_role();check(hybrid.active_player()==0,"hybrid detach resets P1");
+    const auto dead=radial_deadzone(1000,-1000,7849);
+    check(dead[0]==0&&dead[1]==0,"hybrid stick deadzone");
+    const auto outside_deadzone=radial_deadzone(20000,0,7849);
+    check(outside_deadzone[0]>0&&outside_deadzone[1]==0,"hybrid stick outside deadzone");
+    PadReport merged=merge_pad_reports({0x1000,0,0,20000,0,0,0},{0x2000,0,0,20000,0,0,0});
+    check(merged.buttons==0x3000&&merged.lx==32767,"pad reports merge and clamp");
+    Profile follow_profile{};
+    std::istringstream follow_source("schema 3\n87 p1 up\n81 p1 slot1\n81 p2 slot1 1\n");
+    check(read_profile(follow_source,follow_profile,error),"follow profile parse");
+    Engine follow_engine;follow_engine.set_profile(follow_profile);follow_engine.set_follow_active(true);follow_engine.set_active_player(1);
+    follow_engine.input(87,true);
+    check(follow_engine.state()[0][up]==0&&follow_engine.state()[1][up]==1,"P1 keyboard binding follows active P2");
+    follow_engine.input(87,false);follow_engine.input(81,true);
+    check(follow_engine.state()[1][slot1]==1,"base skill follows active P2");
+    follow_engine.input(81,false);follow_engine.input(16,true);follow_engine.input(81,true);
+    check(follow_engine.state()[1][slot1]==1,"explicit P2 chord remains fixed");
+    follow_engine.input(81,false);follow_engine.input(16,false);
+    follow_engine.set_active_player(0);follow_engine.input(87,true);
+    check(follow_engine.state()[0][up]==1&&follow_engine.state()[1][up]==0,"keyboard follows back to P1");
+    follow_engine.reset();
+    BridgeOptions hybrid_options{};
+    std::istringstream options_v2("schema 2\nnative_pause 121\ncontroller_role_toggle 32\nkeyboard_follow_active true\n");
+    check(read_bridge_options(options_v2,hybrid_options,error)&&hybrid_options.keyboard_follow_active&&hybrid_options.controller_role_toggle==32,"hybrid options v2");
+    std::istringstream options_v1("schema 1\nnative_pause 121\n");
+    check(read_bridge_options(options_v1,hybrid_options,error)&&hybrid_options.keyboard_follow_active&&hybrid_options.controller_role_toggle==32,"legacy options retain hybrid defaults");
     std::cout << "All core checks passed\n";
 }
