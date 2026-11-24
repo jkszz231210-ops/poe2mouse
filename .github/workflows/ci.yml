@@ -20,6 +20,13 @@ jobs:
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release
       - run: ctest --test-dir build -C Release --output-on-failure
+      - name: Parse dependency preparation script (no downloads or installation)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $tokens = $null; $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/PrepareDependencies.ps1'), [ref]$tokens, [ref]$errors)
+          if ($errors.Count -gt 0) { $errors | Out-String | Write-Error; exit 1 }
       - name: Stage portable lab
         if: runner.os == 'Windows'
         run: cmake --install build --config Release --prefix dist

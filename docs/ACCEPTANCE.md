@@ -30,3 +30,5 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 - [ ] Office test: no game/driver; actionable guide, same-profile preview, Chinese edit/save/reject conflict, reserved native pause. Game UI compatibility matrix: NATIVE_UI.md.
 
 - [ ] After explicit device self-check, main-window real input test: hold P1 movement, P2 movement, independent button/chord, release, F10 pause, re-arm; observe actual XInput, not simulated state. Persistent mismatches pause and invalidate self-check. Short taps require separate timing tests.
+
+- [ ] Dependency setup: existing DLL and service retained; clean installation downloads pinned artifacts, rejects hash/signature mismatch, extracts x64 DLL only, driver installer requires explicit consent, cleans own temp, detects policy/network errors, recheck succeeds. No game required; use approved test machine only.

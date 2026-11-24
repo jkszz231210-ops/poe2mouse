@@ -14,3 +14,7 @@ device_probe.exe 是独立的原生 C++ 设备生命周期测试。创建两个 
  
 ## 反馈
 复制整个控制台输出（请勿附私人路径），说明物理手柄是否已连接、驱动版本、是否出现两个新增设备、退出后是否消失。E200 参数错误，E201 DLL 加载失败，E202 SDK 符号缺失，E203/E204 分配失败，E205 连接/创建设备失败；E206 槽位分配异常；E207 初始中立回读失败；E208 样本或中立回读失败；E209 清理异常。十六进制 SDK 返回码有助于定位。尚未在 Windows 实机执行，CI 只负责编译，无驱动安装。软件仍不具备 PoE2 游戏内双控。
+
+## 0.1.15 一键准备
+主界面按钮启动随包 PrepareDependencies.ps1（Windows PowerShell，遵守执行策略）。明确确认后下载缺失组件：vgamepad 0.1.0 PyPI sdist，SHA256 57f6bd01aec0c172947517fb782d150ef9b285f7f4d524c317374fa5c24a89de，仅提取 x64 DLL，不运行 Python 包。ViGEmBus 1.22.0 官方安装包 SHA256 89220A7865076B342892F98865F3499FB7C4CFD673159E89D352C360FD014C6A（Microsoft winget manifest）；要求 Authenticode Valid，用户输入 Y 才启动交互式安装。已存在 SDK 不覆盖，已检测到服务不重装。临时目录仅删除本次创建的目录，已校验的驱动安装包保留于 dependencies。无网络、校验失败、策略限制或安装失败需反馈；不关闭防护、不修改签名设置。手动流程仍可用。
+来源：https://pypi.org/project/vgamepad/0.1.0/#files ; https://github.com/microsoft/winget-pkgs/blob/master/manifests/v/ViGEm/ViGEmBus/1.22.0/ViGEm.ViGEmBus.installer.yaml

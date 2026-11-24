@@ -44,6 +44,7 @@ enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id,chec
 enum : UINT { edit_list_id=200,edit_role_id,edit_apply_id,edit_new_id,edit_remove_id };
 void message(const wchar_t* s) { if(status) SetWindowTextW(status,s); }
 bool prepare_sdk(HWND w);
+void prepare_dependencies(HWND w);
 bool load_configuration();
 void show_details(HWND owner,const wchar_t* title,const std::wstring& content);
 void refresh_preview();
@@ -203,7 +204,7 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.14\n"
+    out<<"PoE2Mouse bridge 0.1.15\n"
         <<"device_verified: "<<device_verified<<"\n"
         <<"live_samples: "<<live_samples<<"\nlive_mismatches: "<<live_mismatches<<"\nlive_faults: "<<live_faults<<"\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
@@ -251,10 +252,7 @@ std::wstring key_name(unsigned k) {
     if(k==40) return L"下方向键";
     return L"VK "+std::to_wstring(k);
 }
-void open_url(HWND w,const wchar_t* url) {
-    if(reinterpret_cast<INT_PTR>(ShellExecuteW(w,L"open",url,nullptr,nullptr,SW_SHOWNORMAL))<=32)
-        message(L"E307：无法打开链接，请查看随包 QUICK_START.md。");
-}
+
 LRESULT CALLBACK details_proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     if(m==WM_CREATE) {
         const auto* cs=reinterpret_cast<const CREATESTRUCTW*>(lp);
@@ -283,8 +281,8 @@ void help(HWND w) {
     stop(L"已暂停，可查看帮助。");
     show_details(w,L"PoE2Mouse 新手教程",
         L"这是工程测试版，不是已验证可游玩的正式版。\r\n\r\n"
-        L"第1步：准备环境\r\n关闭游戏。点击【检查依赖】。需要官方 ViGEmBus 驱动与可信 x64 ViGEmClient.dll；本软件不会安装驱动或自动下载文件。"
-        L"可通过【依赖下载说明】打开官方来源说明。驱动已停止维护，仅用于当前原型。\r\n\r\n"
+        L"第1步：准备环境\r\n关闭游戏。点击【检查依赖】。需要官方 ViGEmBus 驱动与可信 x64 ViGEmClient.dll；点击一键准备依赖可下载并校验缺失组件；驱动需另行确认安装。"
+        L"也可按随包 DEVICE_PROBE.md 手动准备。驱动已停止维护，仅用于当前原型。\r\n\r\n"
         L"第2步：连接设备\r\n点击【连接两个设备】，确认两个独立 XInput 槽位。设备创建后默认暂停。\r\n\r\n"
         L"第3步：验证键鼠\r\n点击【中文键位 / 改键】确认当前配置，选中一行可直接修改并保存。无需驱动时用离线预览。Windows Win+R 输入 joy.cpl，打开控制器属性。"
         L"回到本软件点击【选择测试窗口】，确认后在三秒内切到属性窗口，松开所有按键。逐项检查两个设备的输入和释放。"
@@ -538,11 +536,36 @@ void show_keys(HWND w) {
     if(editor) {EnableWindow(w,FALSE);refresh_bindings();SetForegroundWindow(editor);}
     else message(L"E307：键位窗口打开失败。");
 }
+void prepare_dependencies(HWND w) {
+    stop(L"已暂停，准备依赖。");
+    if(session&&session->connected) {message(L"请先断开设备再准备依赖。");return;}
+    const auto script=folder/L"PrepareDependencies.ps1";
+    std::error_code ec;
+    if(!std::filesystem::is_regular_file(script,ec)) {
+        message(L"E310：缺少依赖准备脚本，请重新解压完整软件包。");return;
+    }
+    if(MessageBoxW(w,L"将打开依赖准备窗口，从固定官方来源下载缺失组件并校验 SHA-256。不会自动覆盖已有 DLL；驱动安装需再次确认及系统授权。公司电脑请先确认允许。继续？",
+        L"一键准备依赖",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return;
+    wchar_t sys[MAX_PATH]{};
+    const UINT n=GetSystemDirectoryW(sys,MAX_PATH);
+    if(n==0||n>=MAX_PATH) {message(L"E310：无法定位 Windows PowerShell。");return;}
+    const auto ps=std::filesystem::path(sys)/L"WindowsPowerShell"/L"v1.0"/L"powershell.exe";
+    const auto args=L"-NoProfile -File \""+script.wstring()+L"\"";
+    if(reinterpret_cast<INT_PTR>(ShellExecuteW(w,L"open",ps.c_str(),args.c_str(),folder.c_str(),SW_SHOWNORMAL))<=32) {
+        message(L"E310：无法启动依赖准备。请查看 DEVICE_PROBE.md。");return;
+    }
+    message(L"依赖准备窗口已打开。完成后点击检查依赖；若执行策略阻止，请按手动教程操作。");
+}
+
 bool prepare_sdk(HWND w) {
     if(sdk_ready) return true;
     if(!sdk) return false;
     std::error_code ec;
-    if(sdk_path.empty()||!std::filesystem::is_regular_file(sdk_path,ec)) {
+    if(sdk_path.empty()||!std::filesystem::is_regular_file(sdk_path,ec)) sdk_path=folder/L"ViGEmClient.dll";
+    if(!std::filesystem::is_regular_file(sdk_path,ec)) {
+        const auto choice=MessageBoxW(w,L"未找到 SDK DLL。点击是启动一键准备；点击否手动选择已有 DLL；取消返回。",L"缺少运行依赖",MB_YESNOCANCEL|MB_ICONQUESTION);
+        if(choice==IDYES) {prepare_dependencies(w);return false;}
+        if(choice!=IDNO) return false;
         wchar_t file[MAX_PATH]{};
         OPENFILENAMEW dlg{};dlg.lStructSize=sizeof(dlg);dlg.hwndOwner=w;dlg.lpstrFile=file;dlg.nMaxFile=MAX_PATH;
         dlg.lpstrFilter=L"ViGEmClient.dll\0ViGEmClient.dll\0";dlg.lpstrTitle=L"选择可信的 x64 ViGEmClient.dll";
@@ -567,7 +590,10 @@ bool check_dependencies(HWND w) {
     const bool closed=session->close();
     cleanup_failed=cleanup_failed||!closed;
     if(ok&&closed) message(L"依赖检查通过：SDK 已加载、驱动可连接。下一步连接两个设备。");
-    else message(L"E205：驱动连接失败。请检查官方驱动是否安装，并查看控制台。");
+    else {
+        message(L"E205：驱动连接失败。请检查驱动或一键准备依赖。");
+        if(!cleanup_failed&&MessageBoxW(w,L"驱动连接失败。是否打开一键依赖准备窗口？已有驱动不会被自动重装。",L"检查依赖",MB_YESNO|MB_ICONQUESTION)==IDYES) prepare_dependencies(w);
+    }
     return ok&&closed;
 }
 
@@ -640,7 +666,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         button(L"暂停输出",15,163,stop_id);
         button(L"断开设备",215,163,detach_id);
         button(L"复制诊断",415,163,report_id);
-        button(L"依赖下载说明",15,206,driver_id);
+        button(L"一键准备依赖",15,206,driver_id);
         button(L"重新读取配置",215,206,config_id);
         button(L"原生键鼠模式（暂停）",415,206,native_id);
         button(L"完整教程",15,249,help_id);
@@ -664,7 +690,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         else if(LOWORD(wp)==help_id) help(w);
         else if(LOWORD(wp)==keys_id) show_keys(w);
         else if(LOWORD(wp)==check_id) check_dependencies(w);
-        else if(LOWORD(wp)==driver_id) {stop(L"已暂停。");open_url(w,L"https://github.com/jkszz231210-ops/poe2mouse/blob/dev/bootstrap/docs/DEVICE_PROBE.md");}
+        else if(LOWORD(wp)==driver_id) prepare_dependencies(w);
         else if(LOWORD(wp)==config_id) {stop(L"已暂停。");load_configuration();refresh_bindings();message(config_ok?L"配置已读取。请查看当前键位并重新启用。":L"E300：配置无效，请查看当前键位中的错误并修复。");}
         else if(LOWORD(wp)==stop_id) stop(L"已手动暂停。");
         else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"Attach unsuccessful; see detailed error above.\n";}
@@ -727,7 +753,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.14 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.15 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -741,7 +767,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.14 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.15 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

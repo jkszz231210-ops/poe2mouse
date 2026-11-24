@@ -48,3 +48,5 @@ Office 0.1.11 runtime observation: driver connection, target add/update, index A
 Office evidence: 0.1.11 joy.cpl shows two controllers; XInput slots 0/1 connected and all absent after cleanup. E206 prevents actual sample readback. 0.1.14 uses sequential XInput discovery with mandatory explicit readback gate; runtime retest pending.
 
 0.1.13 Windows/Linux CI success: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45350595952 . 0.1.14 adds current-state monitor only during explicit local test; not a gameplay polling loop. Windows runtime pending.
+
+0.1.14 Windows/Linux CI passed https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45351492586 . 0.1.15 adds opt-in dependency preparation script and UI entry. Network download/install runtime pending; no automatic install or policy bypass.

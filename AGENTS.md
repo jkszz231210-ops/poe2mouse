@@ -22,3 +22,5 @@
 - Usability is a release gate independent of cosmetic design: main executable must open help even when dependencies/configuration are missing, provide Chinese first-use guidance, explain pause versus detach, and expose actual binding and diagnostic information. No silent driver installation.
 
 - First-use guide should perform real steps, not just prose. The main bridge's driver-free preview and editor must share the exact active configuration; apply validated edits without restart, neutralize output before changes. Native inventory/map/shop/chat shortcuts must be considered separately from combat; explicit pause does not imply game-side input-mode support.
+
+- Dependency preparation must be opt-in, pinned URL and SHA-256, driver installer signature checked, no silent elevation or execution-policy bypass, no overwriting existing user DLL, no cleanup outside task-owned paths. Manual offline path remains available.
