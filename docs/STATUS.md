@@ -52,3 +52,6 @@ Office evidence: 0.1.11 joy.cpl shows two controllers; XInput slots 0/1 connecte
 0.1.14 Windows/Linux CI passed https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45351492586 . 0.1.15 adds opt-in dependency preparation script and UI entry. Network download/install runtime pending; no automatic install or policy bypass.
 
 0.1.15 office: E206 resolved (observed XInput slots 0/1, SDK both 0); E207 exact neutral failed on both with identical axis offsets. PM-022 adds explicit opt-in setup initialization and strict exact-neutral readback, pending CI/runtime. No game compatibility claims.
+
+## Latest verified office milestone: v0.1.16 (7c86d44), 2026-11-24
+User-provided real Windows console: P1/P2 observed slots 0/1, SDK both 0 (W206), P1 and P2 initialization PASS, Both devices exact neutral PASS, Assigned slots 0 and 1, Device 1: sample=PASS neutral=PASS, Device 2: sample=PASS neutral=PASS. The independent sample test checks other device neutral. PM-019 and PM-022 verified fixed for this environment. CI: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45356904204 . Manual Raw Input to XInput live test, pause/re-arm, game compatibility and performance are still pending; earlier E302 occurred before self-check, not a post-check failure. No new executable needed for next test.
