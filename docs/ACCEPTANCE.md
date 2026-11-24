@@ -42,3 +42,8 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 - [ ] Native game compatibility (all P0 game gates remain open).
 
 - [ ] PM-025 external-window setup: no self-check, no external selection, target changes during release wait, held relevant key timeout, successful arm in ordinary allowed external app, F10/focus loss neutral. Actual game compatibility remains distinct.
+
+## Home v0.1.17 runtime evidence
+- [x] Two observed slots, exact neutral initialization, isolated diagnostic output and return to zero.
+- [x] E302-C blocks before self-check; local and external window arming and local re-arm reported PASS.
+- [ ] Verify external application's actual reception and focus-loss behavior; identify target application. Game acceptance remains open.
