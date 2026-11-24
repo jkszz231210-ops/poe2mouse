@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include "poe2mouse/input_core.hpp"
 
@@ -52,7 +53,11 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         if (!(LOWORD(wp)&(MK_LBUTTON|MK_RBUTTON|MK_MBUTTON|MK_XBUTTON1|MK_XBUTTON2))) ReleaseCapture();
         return TRUE;
     case WM_KILLFOCUS: case WM_CANCELMODE: clear(w); if(GetCapture()==w) ReleaseCapture(); return 0;
-    case WM_CAPTURECHANGED: if(lp!=reinterpret_cast<LPARAM>(w)) clear(w); return 0;
+    case WM_CAPTURECHANGED:
+        if(lp!=reinterpret_cast<LPARAM>(w)) {
+            for(unsigned code : {VK_LBUTTON,VK_RBUTTON,VK_MBUTTON,VK_XBUTTON1,VK_XBUTTON2}) key(w,code,false);
+        }
+        return 0;
     case WM_ACTIVATEAPP: if(!wp) clear(w); return 0;
     case WM_PAINT: {
         PAINTSTRUCT ps{}; HDC dc=BeginPaint(w,&ps);
