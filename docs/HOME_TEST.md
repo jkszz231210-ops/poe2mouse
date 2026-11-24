@@ -1,4 +1,4 @@
-# Home test: v0.1.5 local lab
+# Home test: v0.1.6 local lab
 This package does not connect to PoE2, install drivers, send external inputs or need a compiler. Extract all files together into a writable folder on D:. Start input_lab.exe. Windows interactive testing is still required.
  
 1. Hold WASD: both colored markers move, at intentionally different speeds. Observe divergence and the obstacle.
@@ -19,3 +19,5 @@ Use existing characters and the game's supported couch co-op menu. Record game v
 10. Profile > Edit bindings: add `82 p1 slot1` and `82 p2 slot13 1` to a profile without those entries, Apply, then R and Shift+R. Release Shift before R and check the selected action remains active until R releases. Restart to confirm persistence. Try duplicate entries and Cancel to verify prior configuration is unchanged. Use default profile for examples.
 
 11. Optional device lifecycle probe: close games, follow DEVICE_PROBE.md, check two neutral devices are created and removed; do not confuse this with PoE2 integration.
+
+12. With all games closed, opt into TEST in the device probe. Copy assigned indices and PASS/FAIL sample/neutral lines. Confirm both devices disappear on exit. A skipped test is not a pass.

@@ -1,5 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
+#include "poe2mouse/axis_curve.hpp"
+#include <limits>
 #include "poe2mouse/diagnostics.hpp"
 #include <iostream>
 #include <cstdlib>
@@ -126,5 +128,16 @@ int main() {
     check(output.ends_with("  profile_invalid\n"),"recent event ordering");
     check(output.size()<4096,"bounded report size");
     check(output.find("  startup_ok\n")==std::string::npos,"oldest event evicted");
+    const auto zero=radial_curve({0.01,0.01},{});
+    check(zero.x==0&&zero.y==0,"radial deadzone");
+    const auto diagonal=radial_curve({1,1},{});
+    check(std::abs(std::hypot(diagonal.x,diagonal.y)-1)<1e-9,"diagonal bounded");
+    const auto slow=radial_curve({0.2,0},{0.08,0.15,2,1});
+    const auto fast=radial_curve({0.8,0},{0.08,0.15,2,1});
+    check(slow.x>=0.15&&fast.x>slow.x&&fast.x<=1,"curve monotonic");
+    const auto negative=radial_curve({-0.2,0},{0.08,0.15,2,1});
+    check(std::abs(negative.x+slow.x)<1e-9,"curve symmetric");
+    check(radial_curve({1,1},{1,0,1,1}).x==0,"invalid curve neutral");
+    check(radial_curve({std::numeric_limits<double>::quiet_NaN(),0},{}).x==0,"invalid sample neutral");
     std::cout << "All core checks passed\n";
 }
