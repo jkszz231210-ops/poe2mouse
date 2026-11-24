@@ -1,4 +1,4 @@
-# Home test: v0.1.4 local lab
+# Home test: v0.1.5 local lab
 This package does not connect to PoE2, install drivers, send external inputs or need a compiler. Extract all files together into a writable folder on D:. Start input_lab.exe. Windows interactive testing is still required.
  
 1. Hold WASD: both colored markers move, at intentionally different speeds. Observe divergence and the obstacle.
@@ -17,3 +17,5 @@ Use existing characters and the game's supported couch co-op menu. Record game v
 9. Upgrade from 0.1.2 by extracting into the same directory after closing the app. New archives contain lab.default.profile, never lab.profile. Existing lab.profile takes precedence. Verify bindings survive restart. Back up manually before upgrade.
 
 10. Profile > Edit bindings: add `82 p1 slot1` and `82 p2 slot13 1` to a profile without those entries, Apply, then R and Shift+R. Release Shift before R and check the selected action remains active until R releases. Restart to confirm persistence. Try duplicate entries and Cancel to verify prior configuration is unchanged. Use default profile for examples.
+
+11. Optional device lifecycle probe: close games, follow DEVICE_PROBE.md, check two neutral devices are created and removed; do not confuse this with PoE2 integration.

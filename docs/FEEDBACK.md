@@ -1,4 +1,4 @@
-# 使用说明与问题反馈 / v0.1.4
+# 使用说明与问题反馈 / v0.1.5
 当前仅为离线双角色沙盒，不是游戏适配器。无需安装驱动。解压到 D 盘可写目录，双击 input_lab.exe。
 
 ## 1. 使用
@@ -31,3 +31,6 @@ Help > Check input devices 可查看当前 Windows 枚举的键盘、鼠标、HI
 
 ## 5. 多技能绑定
 Profile > Edit bindings 可直接编辑并保存配置，无需打开外部编辑器。Schema 3 每行支持按键、角色、动作及可选组合键掩码（Shift=1、Ctrl=2、Alt=4，可相加）。slot1 至 slot13、flask1/2、weapon_swap、interact 是沙盒逻辑动作，并非实际游戏槽位输出。重复键位加相同组合条件会报行号。旧配置仍可读取。详细说明见 BINDINGS.md。
+
+## 6. 原生八键及设备反馈
+WASD 主技能栏按用户确认的左/中/右鼠标键及 Q/E/R/T/F 八键设计，额外五个逻辑标签不代表游戏已支持。独立 device_probe.exe 使用说明见 DEVICE_PROBE.md；反馈控制台的返回码和设备出现/移除情况。

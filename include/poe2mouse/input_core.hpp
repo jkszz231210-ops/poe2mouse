@@ -104,7 +104,7 @@ public:
         if(a>=action_count||mask==0||mask>3) return false;
         const auto change=[down](unsigned& n){if(down) ++n;else if(n) --n;};
         if(mask==3&&a<4) change(shared_[a]);
-        else for(unsigned p=0;p<2;++p) if(mask&(1u<<p)) change(base_[p][a]);
+        else for(unsigned p=0;p<2;++p) if(mask&(std::size_t{1}<<p)) change(base_[p][a]);
         state_=base_;
         const bool p1=base_[0][static_cast<unsigned>(Action::solo_p1)]!=0;
         const bool p2=base_[1][static_cast<unsigned>(Action::solo_p2)]!=0;
