@@ -1,5 +1,6 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
+#include "poe2mouse/pad_output.hpp"
 #include "poe2mouse/axis_curve.hpp"
 #include <limits>
 #include "poe2mouse/diagnostics.hpp"
@@ -139,5 +140,22 @@ int main() {
     check(std::abs(negative.x+slow.x)<1e-9,"curve symmetric");
     check(radial_curve({1,1},{1,0,1,1}).x==0,"invalid curve neutral");
     check(radial_curve({std::numeric_limits<double>::quiet_NaN(),0},{}).x==0,"invalid sample neutral");
+    PadMap map{};
+    std::istringstream mapping("schema 1\np1 up lup\np1 right lright\np1 slot1 a\np2 slot1 x\n");
+    check(read_pad_map(mapping,map,error),"controller map");
+    Profile independent{};
+    std::istringstream bridge_profile("schema 3\n87 p1 up\n68 p1 right\n81 p1 slot1\n81 p2 slot1 1\n");
+    check(read_profile(bridge_profile,independent,error)&&independent_profile(independent,map,error),"independent bridge config");
+    check(!independent_profile(roundtrip,map,error),"reject sandbox broadcast profile");
+    e.set_profile(independent);e.input(87,true);e.input(68,true);e.input(81,true);
+    auto pr1=make_pad_report(e.state()[0],map[0]);
+    check(pr1.ly==23170&&pr1.lx==23170&&pr1.buttons==0x1000,"normalized movement and independent button");
+    check(make_pad_report(e.state()[1],map[1])==PadReport{},"other target neutral");
+    e.input(81,false);e.input(16,true);e.input(81,true);e.input(16,false);
+    check(make_pad_report(e.state()[1],map[1]).buttons==0x4000,"independent chord latched");
+    e.input(81,false);check(make_pad_report(e.state()[1],map[1])==PadReport{},"chord release");
+    e.reset();check(make_pad_report(e.state()[0],map[0])==PadReport{},"neutral on reset");
+    std::istringstream duplicate_map("schema 1\np1 up lup\np1 up ldown\n");
+    check(!read_pad_map(duplicate_map,map,error)&&map[0][0]==Control::lup,"transactional map rejection");
     std::cout << "All core checks passed\n";
 }

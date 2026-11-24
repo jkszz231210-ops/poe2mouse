@@ -1,0 +1,28 @@
+schema 1
+# Diagnostic controller mapping, not game-confirmed.
+p1 up lup
+p1 down ldown
+p1 left lleft
+p1 right lright
+p1 slot1 a
+p1 slot2 x
+p1 slot3 y
+p1 slot4 b
+p1 slot5 lb
+p1 slot6 rt
+p1 slot7 lt
+p1 slot8 rb
+p1 dodge b
+p2 up lup
+p2 down ldown
+p2 left lleft
+p2 right lright
+p2 slot1 a
+p2 slot2 x
+p2 slot3 y
+p2 slot4 b
+p2 slot5 lb
+p2 slot6 rt
+p2 slot7 lt
+p2 slot8 rb
+p2 dodge b
