@@ -245,8 +245,8 @@ int main() {
     hybrid.reset_role();check(hybrid.active_player()==0,"hybrid detach resets P1");
     const auto dead=radial_deadzone(1000,-1000,7849);
     check(dead[0]==0&&dead[1]==0,"hybrid stick deadzone");
-    const auto live=radial_deadzone(20000,0,7849);
-    check(live[0]>0&&live[1]==0,"hybrid stick outside deadzone");
+    const auto outside_deadzone=radial_deadzone(20000,0,7849);
+    check(outside_deadzone[0]>0&&outside_deadzone[1]==0,"hybrid stick outside deadzone");
     PadReport merged=merge_pad_reports({0x1000,0,0,20000,0,0,0},{0x2000,0,0,20000,0,0,0});
     check(merged.buttons==0x3000&&merged.lx==32767,"pad reports merge and clamp");
     Profile follow_profile{};

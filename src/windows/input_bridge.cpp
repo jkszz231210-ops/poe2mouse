@@ -208,6 +208,12 @@ bool ready_to_arm() {
     XINPUT_STATE physical_state{};
     if(physical_slot>=XUSER_MAX_COUNT||XInputGetState(physical_slot,&physical_state)!=ERROR_SUCCESS)
         return arm_failure("E302-L physical XInput controller missing",L"E302-L：实体 XInput 手柄已断开或不可读取。");
+    const auto& pad=physical_state.Gamepad;
+    const auto outside=[](SHORT v,int deadzone){return v>deadzone||v< -deadzone;};
+    if(pad.wButtons!=0||pad.bLeftTrigger>30||pad.bRightTrigger>30||
+       outside(pad.sThumbLX,7849)||outside(pad.sThumbLY,7849)||
+       outside(pad.sThumbRX,8689)||outside(pad.sThumbRY,8689))
+        return arm_failure("E302-N physical controller not neutral",L"E302-N：请松开实体手柄所有按键，并将摇杆回到中间位置后重试。");
     return true;
 }
 bool relevant_keys_down() {
@@ -829,6 +835,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         button(L"设备输出自检",415,249,readback_id);
         guide_label=label(L"引导：点击新手引导开始；可以随时使用离线预览。",15,294,610,55);
         role_label=label(L"当前键鼠目标：P1 | 左摇杆：双人同步 | Back：切换角色 | 键鼠跟随当前角色",15,354,610,25);
+        refresh_role_label();
         preview_label=label(L"离线预览：未启用。",15,383,610,70);
         status=label(config_ok?L"状态：尚未连接。请从新手教程开始。":L"E300：配置无效；仍可查看帮助和反馈。",15,459,610,58);
         label(L"暂停/原生键鼠：保留设备并归零；断开：释放设备但不退出软件。\r\n"
