@@ -33,7 +33,7 @@ int main() {
     e.input(87,true); e.set_profile(p);
     check(e.state()==Engine::State{},"profile replacement reset");
     check(!e.input(300,true),"out of range");
-    for (auto bad : {"schema 2\n", "87 both up\n", "schema 1\n87 both up\n87 p1 up\n",
+    for (auto bad : {"schema 3\n", "87 both up\n", "schema 1\n87 both up\n87 p1 up\n",
                     "schema 1\n256 p1 up\n", "schema 1\n1 invalid up\n",
                     "schema 1\n1 p1 unknown\n", "schema 1\n-1 p1 up\n",
                     "schema 1\n1 p1 up extra\n"}) {
@@ -48,6 +48,24 @@ int main() {
     check(read_profile(again,roundtrip,error),"read serialized profile");
     for(std::size_t i=0;i<p.size();++i)
         check(p[i].target==roundtrip[i].target && p[i].action==roundtrip[i].action,"round trip");
+    Profile v2{};
+    std::istringstream v2source("schema 2\n87 both up\n16 both solo_p1\n17 both solo_p2\n38 p2 up\n1 p1 attack\n");
+    check(read_profile(v2source,v2,error),"schema 2 modifiers");
+    e.set_profile(v2); e.input(87,true); e.input(16,true);
+    check(e.state()[0][up]==1 && e.state()[1][up]==0,"held movement reroutes to P1");
+    e.input(17,true);
+    check(e.state()[0][up]==0 && e.state()[1][up]==0,"conflicting modifiers neutralize shared movement");
+    e.input(38,true); e.input(1,true);
+    check(e.state()[1][up]==1 && e.state()[0][attack]==1,"explicit actions remain independent");
+    e.input(16,false);
+    check(e.state()[0][up]==0 && e.state()[1][up]==2,"P2 shared plus explicit");
+    e.input(17,false);
+    check(e.state()[0][up]==1 && e.state()[1][up]==2,"restore shared movement");
+    e.input(38,false); e.input(87,false); e.input(1,false);
+    check(e.state()==Engine::State{},"release all after modifier changes");
+    std::istringstream illegal("schema 2\n16 p1 solo_p1\n");
+    check(!read_profile(illegal,v2,error),"reject invalid modifier target");
+    e.set_profile(roundtrip);
     Arena arena;
     e.set_profile(roundtrip);
     e.input(87,true);

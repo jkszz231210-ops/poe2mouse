@@ -1,5 +1,5 @@
-# Schema 1; decimal Windows virtual-key IDs; local simulator only.
-schema 1
+# Schema 2; decimal Windows virtual-key IDs; local simulator only.
+schema 2
 87 both up
 65 both left
 83 both down
@@ -13,3 +13,5 @@ schema 1
 37 p2 left
 40 p2 down
 39 p2 right
+16 both solo_p1
+17 both solo_p2
