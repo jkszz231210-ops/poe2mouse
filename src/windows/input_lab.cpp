@@ -151,7 +151,7 @@ void file_command(HWND w,UINT id) {
         const auto report=make_report();
         clear(w);
         const bool ok=id==report_id?write_report(report):copy_report(w,report);
-        notify(w,ok?(id==report_id?L"Saved diagnostics.txt beside the executable.":L"Diagnostic report copied. Paste into your support chat or issue."):L"Export failed. Try copying the report or use a writable folder.");
+        notify(w,ok?(id==report_id?L"Saved diagnostics.txt beside the executable.":L"Diagnostic report copied. Paste into your support chat or issue."):L"E104: Report export failed. Try copying the report or use a writable folder.");
         return;
     }
     if(id!=reset_id && id!=reload_id && id!=import_id && id!=export_id) return;
@@ -160,7 +160,7 @@ void file_command(HWND w,UINT id) {
     if(id==reload_id) {
         pm::Profile next{};
         if(load(profile_path,next)) { diagnostics.record(pm::Event::profile_loaded); profile=next; engine.set_profile(profile); notify(w,L"Profile reloaded."); }
-        else { diagnostics.record(pm::Event::profile_invalid); notify(w,L"Invalid or missing profile. Previous configuration retained."); }
+        else { diagnostics.record(pm::Event::profile_invalid); notify(w,L"E102: Invalid or missing profile. Previous configuration retained."); }
         return;
     }
     wchar_t file[MAX_PATH]{};
@@ -170,10 +170,10 @@ void file_command(HWND w,UINT id) {
     dlg.Flags=OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(id==import_id?OFN_FILEMUSTEXIST:OFN_OVERWRITEPROMPT);
     const bool selected=(id==import_id?GetOpenFileNameW(&dlg):GetSaveFileNameW(&dlg))!=FALSE;
     if(!selected) return;
-    if(id==export_id) { const bool ok=save(file,profile); diagnostics.record(ok?pm::Event::profile_exported:pm::Event::profile_write_failed); notify(w,ok?L"Profile exported.":L"Export failed."); return; }
+    if(id==export_id) { const bool ok=save(file,profile); diagnostics.record(ok?pm::Event::profile_exported:pm::Event::profile_write_failed); notify(w,ok?L"Profile exported.":L"E103: Export failed."); return; }
     pm::Profile next{};
-    if(!load(file,next)) { diagnostics.record(pm::Event::profile_invalid); notify(w,L"Invalid profile. Previous configuration retained."); return; }
-    if(!save(profile_path,next)) { diagnostics.record(pm::Event::profile_write_failed); notify(w,L"Could not save profile. Previous configuration retained."); return; }
+    if(!load(file,next)) { diagnostics.record(pm::Event::profile_invalid); notify(w,L"E102: Invalid profile. Previous configuration retained."); return; }
+    if(!save(profile_path,next)) { diagnostics.record(pm::Event::profile_write_failed); notify(w,L"E103: Could not save profile. Previous configuration retained."); return; }
     profile=next; engine.set_profile(profile);
     diagnostics.record(pm::Event::profile_imported);
     notify(w,L"Profile imported, saved and applied.");
@@ -225,8 +225,9 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     profile_path=std::filesystem::path(path).parent_path()/L"lab.profile";
     if(!load(profile_path,profile)) {
         diagnostics.record(pm::Event::startup_profile_failed);
-        copy_report(nullptr,make_report());
-        notify(nullptr,L"E101: Cannot load lab.profile. Restore the original profile beside the executable. A report was attempted on the clipboard; see FEEDBACK.md."); return 1;
+        const int choice=MessageBoxW(nullptr,L"E101: Cannot load lab.profile. Restore the original profile beside the executable. Save diagnostics.txt for feedback?",L"PoE2Mouse",MB_YESNO|MB_ICONERROR);
+        if(choice==IDYES) notify(nullptr,write_report(make_report())?L"Saved diagnostics.txt.":L"E104: Report save failed. Please report E101 and E104.");
+        return 1;
     }
     diagnostics.record(pm::Event::startup_ok);
     engine.set_profile(profile);
