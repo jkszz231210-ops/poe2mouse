@@ -28,3 +28,5 @@
 | PM-017 | v0.1.11 Windows CI：新手教程宽字符串拼接错误（C3873/C2001） | 已修正，待新版 CI |
 
 | PM-018 | 公司 Windows 实测 0.1.11：SDK connect/add/neutral/user_index/remove 均返回 0x20000000，但主程序 E206/E207 并清理设备 | 依赖连接与创建/移除接口成功；槽位及回读尚未通过。0.1.12 分离错误码、输出实际槽位及 XInput 状态，延长有限枚举等待，待实机复测；根因未确认 |
+
+| PM-019 | 公司实机 0.1.11：joy.cpl 两个 Xbox 360，XInput 0/1 connected，退出 0..3 absent，SDK index 返回成功但 E206 | 与上游 https://github.com/nefarius/ViGEmClient/issues/31 高度吻合，实际 SDK 数值尚未知。0.1.13 逐个创建并观察唯一稳定新增槽位；SDK index 仅诊断；必须通过逐设备实际回读后才允许真实输入。待实测 |

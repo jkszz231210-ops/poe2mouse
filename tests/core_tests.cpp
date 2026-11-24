@@ -1,6 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/slot_identity.hpp"
 #include "poe2mouse/bridge_labels.hpp"
 #include "poe2mouse/physical_keys.hpp"
 #include "poe2mouse/axis_curve.hpp"
@@ -198,5 +199,8 @@ int main() {
     e.set_profile(edited);e.input(90,true);
     check(make_pad_report(e.state()[0],map[0]).ly==32767,"new binding active");
     e.reset();check(make_pad_report(e.state()[0],map[0])==PadReport{},"pause neutral");
+    check(new_slot(0,1)==0&&new_slot(1,3)==1,"sequential slot discovery");
+    check(new_slot(2,10)==3&&new_slot(4,5)==0,"existing physical device slots");
+    check(new_slot(0,3)==-1&&new_slot(1,2)==-1&&new_slot(1,1)==-1&&new_slot(16,17)==-1,"ambiguous or invalid discovery rejected");
     std::cout << "All core checks passed\n";
 }

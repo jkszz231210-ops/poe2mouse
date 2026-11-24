@@ -21,7 +21,7 @@ void slots(const char* stage) {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.12 | neutral virtual controller probe\n"
+    std::cout<<"PoE2Mouse 0.1.13 | neutral virtual controller probe\n"
         <<"Close games. This test creates two devices. Optional TEST sends diagnostic samples only.\n";
     if(argc!=2) {
         std::cout<<"Usage: device_probe.exe <absolute path to trusted x64 ViGEmClient.dll>\n";return 2;
@@ -38,7 +38,7 @@ int wmain(int argc,wchar_t** argv) {
     bool ok=false;
     {
         Session s(api);
-        if(s.start()&&s.create(0)&&s.create(1)) {
+        if(s.start()&&create_identified(s,0)&&create_identified(s,1)) {
             Sleep(500); slots("after creation");
             std::cout<<"Open joy.cpl to inspect neutral devices. Close all games, type TEST for readback or press Enter to skip: ";
             std::string line; std::getline(std::cin,line);

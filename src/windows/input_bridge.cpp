@@ -17,7 +17,7 @@ Engine engine;
 Profile current_profile{};
 std::filesystem::path folder,sdk_path;
 Api* sdk=nullptr;
-bool config_ok=false,sdk_ready=false,preview=false;
+bool config_ok=false,sdk_ready=false,preview=false,device_verified=false;
 BridgeOptions options{};
 int guide_stage=-1;
 HWND preview_label=nullptr,guide_label=nullptr,editor=nullptr;
@@ -77,13 +77,14 @@ void stop(const wchar_t* reason) {
     }
     if(!ok) {
         std::cout<<"E304: neutral output failed; closing device session\n";
-        if(session) {const bool closed=session->close();cleanup_failed=cleanup_failed||!closed;}
+        if(session) {const bool closed=session->close();cleanup_failed=cleanup_failed||!closed;device_verified=false;}
         sent={};
         message(L"E304：归零失败，已尝试释放设备。请检查诊断报告。");
     } else if(!unregistered) message(L"E301：注销输入订阅失败，已停止输出。");
     else message(reason);
 }
 void detach() {
+    device_verified=false;
     stop(L"已暂停。");
     if(session) {
         const bool ok=session->close();
@@ -98,8 +99,9 @@ bool attach() {
     if(!config_ok) {message(L"E300：配置无效，请先检查配置。");return false;}
     if(!prepare_sdk(self)) return false;
     if(session->connected&&!session->closed) return true;
-    if(!session->start()||!session->create(0)||!session->create(1)) {
-        detach();message(L"E205：创建设备失败。检查驱动及控制台。");return false;
+    device_verified=false;
+    if(!session->start()||!create_identified(*session,0)||!create_identified(*session,1)) {
+        detach();message(L"E205/E206：创建或识别设备失败。检查控制台。");return false;
     }
     std::array<ULONG,2> index{};
     if(!distinct_slots(*session,index)) {
@@ -110,7 +112,7 @@ bool attach() {
     }
     sent={};assigned=index;diagnostics.record(Event::bridge_attached);
     std::cout<<"P1 XInput slot="<<index[0]<<" P2 XInput slot="<<index[1]<<"\n";
-    message(L"两个设备已连接，尚未启用输入。请先测试。");
+    message(L"两个设备已连接。请先完成设备输出自检，再启用真实输入。");
     return true;
 }
 bool valid_focus() {
@@ -124,6 +126,7 @@ void CALLBACK focus_changed(HWINEVENTHOOK,DWORD,HWND,LONG,LONG,DWORD,DWORD) {
 }
 bool arm(HWND w) {
     stop(L"已暂停。");
+    if(!device_verified) {message(L"请先完成设备输出自检。");return false;}
     if(!config_ok||!session||!session->connected||session->closed||cleanup_failed||!w||!IsWindow(w)||w==GetDesktopWindow()) return false;
     DWORD pid=0;GetWindowThreadProcessId(w,&pid);
     if(!pid||GetForegroundWindow()!=w||!focus_hook) return false;
@@ -194,7 +197,8 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.12\n"
+    out<<"PoE2Mouse bridge 0.1.13\n"
+        <<"device_verified: "<<device_verified<<"\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
         <<"config_ok: "<<config_ok<<"\nsdk_ready: "<<sdk_ready<<"\n"
         <<"armed: "<<armed<<"\nconnected: "<<(session&&session->connected)<<"\n"
@@ -516,6 +520,8 @@ bool device_self_check(HWND w) {
     if(!session||!session->connected||session->closed) {message(L"请先连接两个设备。");return false;}
     if(MessageBoxW(w,L"请确认已关闭全部游戏。自检会逐个设备输出固定测试轴值，并验证另一设备保持中立。是否开始？",L"设备输出自检",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return false;
     const bool ok=readback(*session);
+    device_verified=ok;
+    if(!ok) {detach();message(L"E208：自检失败，设备已尝试释放。请反馈控制台。");return false;}
     stop(ok?L"设备自检通过：两个设备输出、隔离和归零通过。":L"E208：设备自检失败，请复制诊断和控制台结果。");
     return ok;
 }
@@ -657,7 +663,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.12 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.13 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -671,7 +677,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.12 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.13 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

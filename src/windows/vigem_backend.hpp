@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <iostream>
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/slot_identity.hpp"
 namespace pm::win {
 using Error=std::uint32_t;
 constexpr Error success=0x20000000u;
@@ -49,6 +50,7 @@ inline void result(const char* operation,Error code) {
 struct Session {
     Api& api; void* client{}; bool connected{};
     bool closed=false,last_cleanup_ok=true;
+    std::array<ULONG,2> slots{XUSER_MAX_COUNT,XUSER_MAX_COUNT};
     std::array<void*,2> pads{}; std::array<bool,2> added{};
     explicit Session(Api& a):api(a){}
     bool start() {
@@ -82,20 +84,12 @@ struct Session {
         }
         if(connected) api.disconnect(client);
         if(client) api.free_client(client);
-        client=nullptr;connected=false;pads={};added={};last_cleanup_ok=ok;
+        client=nullptr;connected=false;pads={};added={};slots.fill(XUSER_MAX_COUNT);last_cleanup_ok=ok;
         return ok;
     }
     ~Session() { if(!closed) close(); }
     Session(const Session&)=delete; Session& operator=(const Session&)=delete;
 };
-inline bool assigned_slot(Session& s,std::size_t pad,ULONG& slot) {
-    for(unsigned retry=0;retry<20;++retry) {
-        const auto err=s.api.user_index(s.client,s.pads[pad],&slot);
-        if(err==success && slot<XUSER_MAX_COUNT) { std::cout<<"P"<<pad+1<<" SDK user_index="<<slot<<"\n"; return true; }
-        Sleep(50);
-    }
-    std::cout<<"E206: SDK did not return a valid XInput index\n"; return false;
-}
 inline void slot_snapshot() {
     for(DWORD i=0;i<XUSER_MAX_COUNT;++i) {
         XINPUT_STATE s{};const auto code=XInputGetState(i,&s);
@@ -107,22 +101,42 @@ inline void slot_snapshot() {
         std::cout<<"\n";
     }
 }
-inline bool distinct_slots(Session& s,std::array<ULONG,2>& index) {
-    // Device enumeration can complete after the bus accepts the add request.
-    Error a{},b{};
-    for(unsigned retry=0;retry<50;++retry) {
-        index.fill(XUSER_MAX_COUNT);
-        a=s.api.user_index(s.client,s.pads[0],&index[0]);
-        b=s.api.user_index(s.client,s.pads[1],&index[1]);
-        if(a==success&&b==success&&index[0]<XUSER_MAX_COUNT&&index[1]<XUSER_MAX_COUNT&&index[0]!=index[1]) {
-            std::cout<<"Assigned P1="<<index[0]<<" P2="<<index[1]<<" after "<<retry*100u<<" ms\n";
+inline bool connected_mask(unsigned& mask) {
+    mask=0;
+    for(DWORD i=0;i<XUSER_MAX_COUNT;++i) {
+        XINPUT_STATE state{};const auto code=XInputGetState(i,&state);
+        if(code==ERROR_SUCCESS) mask|=1u<<i;
+        else if(code!=ERROR_DEVICE_NOT_CONNECTED) return false;
+    }
+    return true;
+}
+inline bool create_identified(Session& s,std::size_t p) {
+    unsigned before{};
+    if(!connected_mask(before)) {std::cout<<"E206: baseline XInput enumeration failed\n";return false;}
+    if(!s.create(p)) return false;
+    int candidate=-1;unsigned stable=0;
+    for(unsigned attempt=0;attempt<50;++attempt) {
+        unsigned after{};
+        const int next=connected_mask(after)?pm::new_slot(before,after):-1;
+        if(next>=0&&next==candidate) ++stable;
+        else {candidate=next;stable=next>=0?1u:0u;}
+        if(stable>=3) {
+            s.slots[p]=static_cast<ULONG>(candidate);
+            ULONG sdk_index=XUSER_MAX_COUNT;
+            const auto code=s.api.user_index(s.client,s.pads[p],&sdk_index);
+            std::cout<<"P"<<p+1<<" observed XInput slot="<<s.slots[p]<<" SDK index="<<sdk_index<<"\n";
+            if(code!=success||sdk_index!=s.slots[p]) std::cout<<"W206: SDK index mismatch; independent readback required\n";
             return true;
         }
         Sleep(100);
     }
-    result("P1 user_index",a);result("P2 user_index",b);
-    std::cout<<"E206: P1="<<index[0]<<" P2="<<index[1]<<" (must be distinct 0..3)\n";
-    slot_snapshot();return false;
+    std::cout<<"E206: no unique stable new XInput slot\n";slot_snapshot();return false;
+}
+inline bool distinct_slots(Session& s,std::array<ULONG,2>& index) {
+    index=s.slots;
+    unsigned mask{};
+    return index[0]<XUSER_MAX_COUNT&&index[1]<XUSER_MAX_COUNT&&index[0]!=index[1]&&
+        connected_mask(mask)&&(mask&(1u<<index[0]))&&(mask&(1u<<index[1]));
 }
 inline bool matches(DWORD slot,const Report& expected) {
     for(unsigned retry=0;retry<80;++retry) {

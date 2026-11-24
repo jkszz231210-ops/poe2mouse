@@ -1,4 +1,4 @@
-# Capability status (0.1.12)
+# Capability status (0.1.13)
 | Capability | Status |
 |---|---|
 | C++20 core, local P1/P2 shared and independent action state | implemented |
@@ -6,7 +6,7 @@
 | Windows foreground keyboard/mouse diagnostic | implemented |
 | Local movement simulation, wall and speed divergence | implemented |
 | Profile import/export, reload and persistence | implemented; interactive Windows test pending |
-| Portable Windows package workflow | 0.1.10 Windows/Linux CI passed; 0.1.12 CI pending |
+| Portable Windows package workflow | 0.1.10 Windows/Linux CI passed; 0.1.13 CI pending |
 | Bounded diagnostics, explicit clipboard/file export, Chinese feedback guide | implemented; CI and Windows interactive validation pending |
 | Schema 1/2 compatibility, movement-only solo modifiers, upgrade-safe defaults | implemented; latest CI pending |
 | Read-only Raw Input enumeration and XInput slot snapshot | implemented; Windows manual verification pending |
@@ -33,7 +33,7 @@ Previous v0.1.2 commit 77876df passed Windows/Linux CI: https://github.com/jkszz
 
 Prior 0.1.5 commit fdc3012 passed both CI platforms: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330149185 .
 
-0.1.6 CI passed: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330941590 . 0.1.12 adds an explicitly armed independent remapper; no broadcast output.
+0.1.6 CI passed: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330941590 . 0.1.13 adds an explicitly armed independent remapper; no broadcast output.
 
 Acceptance gates: docs/ACCEPTANCE.md. Native auto-target first; no precise mouse aiming requirement unless gameplay tests show a need.
 
@@ -41,6 +41,8 @@ Acceptance gates: docs/ACCEPTANCE.md. Native auto-target first; no precise mouse
 
 0.1.9 CI passed: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45339921332 .
 
-0.1.12: interactive guide, same-config offline preview, localized binding editor, reserved native pause; Windows runtime and native UI compatibility pending. The older independent lab still uses its own profile.
+0.1.13: interactive guide, same-config offline preview, localized binding editor, reserved native pause; Windows runtime and native UI compatibility pending. The older independent lab still uses its own profile.
 
-Office 0.1.11 runtime observation: driver connection, target add/update, index API and removal succeeded, distinct-slot/neutral validation failed. PM-018 diagnostic improvements in 0.1.12, not yet verified. Game integration remains untested.
+Office 0.1.11 runtime observation: driver connection, target add/update, index API and removal succeeded, distinct-slot/neutral validation failed. PM-018 diagnostic improvements in 0.1.13, not yet verified. Game integration remains untested.
+
+Office evidence: 0.1.11 joy.cpl shows two controllers; XInput slots 0/1 connected and all absent after cleanup. E206 prevents actual sample readback. 0.1.13 uses sequential XInput discovery with mandatory explicit readback gate; runtime retest pending.
