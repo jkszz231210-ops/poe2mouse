@@ -68,4 +68,5 @@ Home v0.1.17 runtime evidence (user console, 2026-11-24): distinct slots and bot
 - Keyboard P1 bindings follow active role by default; explicit P2 modifier-layer bindings remain fixed P2. Schema 1 options remain compatible; schema 2 adds controller toggle and follow-active flag.
 - Windows bridge reads exactly one pre-existing XInput controller before creating virtual pads; timer-driven XInput polling only while explicitly armed. Disconnect/focus loss/F10 neutralize both virtual outputs.
 - HidHide is a manual prerequisite for game testing so the game sees only two virtual controllers; no driver install or device hiding changes are automated.
-- CI pending; XInput hardware test, HidHide setup, PoE2 player assignment, game rules and performance unverified.
+- Windows 2022 + Ubuntu 24.04 CI passed (run 45414343127); Windows x64 artifact available. XInput hardware test, HidHide setup, PoE2 player assignment, game rules and performance unverified.
+- Artifact: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45414343127

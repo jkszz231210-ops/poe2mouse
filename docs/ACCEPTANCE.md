@@ -50,7 +50,7 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 
 
 ## v0.1.18 hybrid controller MVP
-- [ ] CI Windows/Linux core tests and Windows x64 package.
+- [x] CI Windows/Linux core tests and Windows x64 package: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45414343127
 - [ ] Physical XInput pad detected before virtual devices; exactly one baseline device; physical slot remains distinct from P1/P2 virtual slots.
 - [ ] Left stick shared to both virtual devices with deadzone; right stick/buttons/triggers/D-pad route only to active role.
 - [ ] Back/View rising edge toggles active role once; held Back does not repeat and is not forwarded.

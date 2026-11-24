@@ -362,7 +362,7 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.17\n"
+    out<<"PoE2Mouse bridge 0.1.18 hybrid XInput\n"
         <<"last_arm_result: "<<last_arm_result<<"\n"
         <<"device_verified: "<<device_verified<<"\n"
         <<"live_samples: "<<live_samples<<"\nlive_mismatches: "<<live_mismatches<<"\nlive_faults: "<<live_faults<<"\n"
@@ -772,33 +772,33 @@ bool device_self_check(HWND w) {
 void next_guide(HWND w) {
     if(guide_stage<0||guide_stage>=6) {
         guide_stage=0;
-        SetWindowTextW(guide_label,L"第1/4步：无需游戏或驱动。下一步开启离线预览。默认键位 W、方向键、Q、Shift+Q。");
+        SetWindowTextW(guide_label,L"第1步：可先开启离线预览。正式混合测试前，请连接一个 Xbox/XInput 实体手柄。");
         return;
     }
     if(guide_stage==0) {
         if(!start_preview(w)) return;
         guide_stage=1;
-        SetWindowTextW(guide_label,L"第1/4步：请观察下方两个角色。松键应恢复无按键；确认后点下一步。");
+        SetWindowTextW(guide_label,L"离线预览：观察两个角色的逻辑状态。确认后点下一步。");
     } else if(guide_stage==1) {
         stop(L"离线预览已停止。");
         guide_stage=2;
-        SetWindowTextW(guide_label,L"第2/4步：检查 SDK 与驱动。公司电脑无安装权限可停在此处，不需要游戏。下一步执行检查。");
+        SetWindowTextW(guide_label,L"第2步：检查 ViGEm 驱动与 SDK。无需启动游戏。");
     } else if(guide_stage==2) {
         if(!check_dependencies(w)) return;
         guide_stage=3;
-        SetWindowTextW(guide_label,L"第3/4步：依赖检查通过。下一步创建两个设备并检查独立槽位。");
+        SetWindowTextW(guide_label,L"第3步：先连接一个 XInput 实体手柄，再创建两台虚拟手柄。关闭其他虚拟手柄工具。");
     } else if(guide_stage==3) {
         if(!attach()) return;
         guide_stage=4;
-        SetWindowTextW(guide_label,L"第4/4步：设备连接通过。下一步运行设备输出自检（请先关闭游戏）。");
+        SetWindowTextW(guide_label,L"设备连接通过。请保持实体手柄连接，下一步运行双设备输出自检。");
     } else if(guide_stage==4) {
         if(!device_self_check(w)) return;
         guide_stage=5;
-        SetWindowTextW(guide_label,L"设备底层自检通过。下一步开启真实设备本窗测试，分别操作 P1/P2。");
+        SetWindowTextW(guide_label,L"底层自检通过。下一步启用混合输入，测试摇杆、角色切换和键鼠跟随。");
     } else if(guide_stage==5) {
         if(!arm(w)) return;
         guide_stage=6;
-        SetWindowTextW(guide_label,L"请按住各角色的移动键和技能键，观察真实回读、独立性与松键归零。F10 暂停。游戏兼容性仍待验证。");
+        SetWindowTextW(guide_label,L"左摇杆同步移动两人；Back 切换当前角色；其他手柄按键和键鼠跟随当前角色。F10 暂停。游戏兼容性仍待验证。");
     }
 }
 

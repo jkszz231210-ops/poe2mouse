@@ -59,3 +59,5 @@
 - HM-002: add shared left-stick routing and active-role-only buttons/right stick/triggers; Back/View toggles P1/P2.
 - HM-003: keyboard P1-target bindings follow active role; explicit P2 modifier-layer chords remain fixed P2. Schema 1 bridge.options remains backward compatible; schema 2 controls role-toggle mask and follow-active.
 - Required runtime: one physical XInput device; HidHide manual setup to hide physical pad from game but whitelist input_bridge.exe; verify only two virtual devices visible to game. Game and policy compatibility not claimed.
+
+- CI fix: first hybrid run failed due to a test variable name collision (`live`); renamed to `outside_deadzone`. Latest run 45414343127 passes Windows build/CTest/package and Ubuntu build/CTest. No physical XInput runtime evidence yet.
