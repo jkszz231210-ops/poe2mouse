@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cmath>
 #include <utility>
+#include <algorithm>
 namespace pm {
 struct PadReport {
     std::uint16_t buttons{};
@@ -11,6 +12,16 @@ struct PadReport {
     friend bool operator==(const PadReport&,const PadReport&)=default;
 };
 static_assert(sizeof(PadReport)==12);
+inline PadReport merge_pad_reports(PadReport a,PadReport b) noexcept {
+    auto axis=[](std::int16_t x,std::int16_t y) {
+        return static_cast<std::int16_t>(std::clamp(static_cast<int>(x)+static_cast<int>(y),-32768,32767));
+    };
+    a.buttons=static_cast<std::uint16_t>(a.buttons|b.buttons);
+    a.lt=std::max(a.lt,b.lt); a.rt=std::max(a.rt,b.rt);
+    a.lx=axis(a.lx,b.lx); a.ly=axis(a.ly,b.ly);
+    a.rx=axis(a.rx,b.rx); a.ry=axis(a.ry,b.ry);
+    return a;
+}
 enum class Control : unsigned {
     none,lup,ldown,lleft,lright,rup,rdown,rleft,rright,
     a,b,x,y,lb,rb,lt,rt,dup,ddown,dleft,dright,start,back,lthumb,rthumb,count

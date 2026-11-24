@@ -10,23 +10,45 @@ inline constexpr std::array<std::wstring_view,action_count> action_zh{
 inline constexpr std::array<std::wstring_view,static_cast<unsigned>(Control::count)> control_zh{
  L"未映射",L"左摇杆↑",L"左摇杆↓",L"左摇杆←",L"左摇杆→",L"右摇杆↑",L"右摇杆↓",L"右摇杆←",L"右摇杆→",
  L"A 键",L"B 键",L"X 键",L"Y 键",L"LB 左肩键",L"RB 右肩键",L"LT 左扳机",L"RT 右扳机",L"十字键↑",L"十字键↓",L"十字键←",L"十字键→",L"Start 菜单键",L"Back 视图键",L"L3 左摇杆按下",L"R3 右摇杆按下"};
-struct BridgeOptions {unsigned pause_key=121;};
+struct BridgeOptions {
+    unsigned pause_key=121;
+    unsigned controller_role_toggle=0x0020; // XInput Back / View
+    bool keyboard_follow_active=true;
+};
 inline bool read_bridge_options(std::istream& in,BridgeOptions& out,std::string& error) {
-    BridgeOptions next{};bool schema=false,seen=false;unsigned lines=0;std::string line;
+    BridgeOptions next{};bool schema=false,pause_seen=false,toggle_seen=false,follow_seen=false;
+    unsigned version=0,lines=0;std::string line;
     while(std::getline(in,line)) {
         if(++lines>32||line.size()>128) {error="options size";return false;}
         std::istringstream row(line);std::string a,b,extra;
         if(!(row>>a)||a.starts_with('#')) continue;
-        if(!schema) {if(a!="schema"||!(row>>b)||b!="1"||(row>>extra)) {error="options schema";return false;}schema=true;continue;}
-        unsigned k{};
-        if(seen||a!="native_pause"||!(row>>k)||k<112||k>135||(row>>extra)) {error="native_pause must be F1-F24 virtual key 112-135";return false;}
-        next.pause_key=k;seen=true;
+        if(!schema) {
+            if(a!="schema"||!(row>>version)||(version!=1&&version!=2)||(row>>extra)) {error="options schema";return false;}
+            schema=true;continue;
+        }
+        if(a=="native_pause") {
+            unsigned k{};
+            if(pause_seen||!(row>>k)||k<112||k>135||(row>>extra)) {error="native_pause must be F1-F24 virtual key code 112-135";return false;}
+            next.pause_key=k;pause_seen=true;
+        } else if(a=="controller_role_toggle") {
+            unsigned k{};
+            if(version<2||toggle_seen||!(row>>k)||k>65535||(row>>extra)) {error="controller_role_toggle requires one XInput button mask";return false;}
+            next.controller_role_toggle=k;toggle_seen=true;
+        } else if(a=="keyboard_follow_active") {
+            if(version<2||follow_seen||!(row>>b)||(row>>extra)||(b!="true"&&b!="false"&&b!="1"&&b!="0")) {error="keyboard_follow_active must be true or false";return false;}
+            next.keyboard_follow_active=(b=="true"||b=="1");follow_seen=true;
+        } else {error="unknown bridge option";return false;}
     }
-    if(!schema||!seen||in.bad()||(!in.eof()&&in.fail())) {error="missing native_pause";return false;}
+    if(!schema||!pause_seen||(version>=2&&(!toggle_seen||!follow_seen))||in.bad()||(!in.eof()&&in.fail())) {
+        error="missing required bridge option";return false;
+    }
     out=next;error.clear();return true;
 }
 inline bool bridge_options_ok(const Profile& p,BridgeOptions o,std::string& error) {
     if(o.pause_key<112||o.pause_key>135) {error="invalid native pause key";return false;}
+    constexpr unsigned xinput_buttons=0xF3FFu;
+    if(o.controller_role_toggle==0||(o.controller_role_toggle&(o.controller_role_toggle-1u))!=0||
+       (o.controller_role_toggle&~xinput_buttons)!=0) {error="controller role toggle must be one standard XInput button";return false;}
     for(const auto& layer:p.layers) if(layer[o.pause_key].target!=Target::none) {error="native pause key conflicts with a mapping";return false;}
     return true;
 }

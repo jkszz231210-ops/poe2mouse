@@ -1,3 +1,5 @@
 # Native pause shortcut. F1-F24, virtual key codes 112-135.
-schema 1
+schema 2
 native_pause 121
+controller_role_toggle 32
+keyboard_follow_active true
