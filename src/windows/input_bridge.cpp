@@ -27,8 +27,9 @@ bool send(std::size_t p,PadReport r,bool force=false) {
 }
 bool raw_registration(bool enable) {
     RAWINPUTDEVICE devices[2]{};
-    devices[0]={1,6,enable?RIDEV_INPUTSINK|RIDEV_DEVNOTIFY:RIDEV_REMOVE,enable?self:nullptr};
-    devices[1]={1,2,enable?RIDEV_INPUTSINK|RIDEV_DEVNOTIFY:RIDEV_REMOVE,enable?self:nullptr};
+    const DWORD flags=static_cast<DWORD>(enable?(RIDEV_INPUTSINK|RIDEV_DEVNOTIFY):RIDEV_REMOVE);
+    devices[0]={1,6,flags,enable?self:nullptr};
+    devices[1]={1,2,flags,enable?self:nullptr};
     if(!RegisterRawInputDevices(devices,2,sizeof(RAWINPUTDEVICE))) {
         std::cout<<"E301 Raw Input registration: "<<GetLastError()<<"\n";return false;
     }
@@ -157,7 +158,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         if(LOWORD(wp)==stop_id) stop(L"Paused by user.");
         else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"E205: Connect unsuccessful\n";}
         else if(LOWORD(wp)==detach_id) detach();
-        else if(LOWORD(wp)==self_id) {if(!arm(w)) message(L"E302: Cannot arm this window.");}
+        else if(LOWORD(wp)==self_id) {if(!arm(w)) std::cout<<"E302: Cannot arm this window; check connection, focus and released keys.\n";}
         else if(LOWORD(wp)==external_id) {
             stop(L"Paused.");
             if(!session||!session->connected||session->closed) {message(L"Connect devices first.");return 0;}
@@ -169,7 +170,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     case WM_TIMER:
         if(wp==select_timer&&countdown) {
             KillTimer(w,select_timer);countdown=false;
-            if(!arm(GetForegroundWindow())) message(L"E302: Could not arm selected window.");
+            if(!arm(GetForegroundWindow())) std::cout<<"E302: Could not arm selected window; check connection, focus and released keys.\n";
         } else if(wp==monitor_timer&&armed&&!valid_focus()) stop(L"Paused: target lost.");
         return 0;
     case WM_INPUT:
