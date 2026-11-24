@@ -52,3 +52,10 @@
 
 ## v0.1.17 家庭实机补充（2026-11-24）
 用户日志：P1/P2 槽位 0/1，W206 仍存在但独立设备识别有效；P1/P2 初始化与严格归零 PASS；Device 1/2 sample=PASS neutral=PASS。自检前 E302-C 正确阻止启用，自检后 Arm: PASS local → Target selected; waiting up to 5 seconds for released inputs → Arm: PASS external → Arm: PASS local。PM-025 的外窗启用流程在此次环境验证通过；目标应用名称与实际外窗输入效果未提供，不据此认定游戏兼容。重复手动自检的易用性仍待优化。
+
+
+## 2026-11-24 v0.1.18 hybrid controller MVP
+- HM-001: no physical controller source in v0.1.17. Add XInput 9.1.0 polling for exactly one physical XInput controller captured before virtual device creation.
+- HM-002: add shared left-stick routing and active-role-only buttons/right stick/triggers; Back/View toggles P1/P2.
+- HM-003: keyboard P1-target bindings follow active role; explicit P2 modifier-layer chords remain fixed P2. Schema 1 bridge.options remains backward compatible; schema 2 controls role-toggle mask and follow-active.
+- Required runtime: one physical XInput device; HidHide manual setup to hide physical pad from game but whitelist input_bridge.exe; verify only two virtual devices visible to game. Game and policy compatibility not claimed.

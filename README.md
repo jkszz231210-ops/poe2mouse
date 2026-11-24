@@ -30,3 +30,7 @@ See [issue ledger](docs/ISSUE_LOG.md). 0.1.9 adds manual full controller test co
 **Start here:** [中文快速开始](docs/QUICK_START.md). Main executable `input_bridge.exe` opens even without SDK/driver. Embedded tutorial, explicit dependency check, actual binding view and reload. No verified game compatibility yet.
 
 0.1.11: in-app guided steps, same-profile driver-free preview, Chinese binding editor and explicit native pause (F10 by default), see [native UI notes](docs/NATIVE_UI.md). No game UI detection or automation.
+
+
+## Hybrid controller MVP (0.1.18)
+See [docs/HYBRID_TEST.md](docs/HYBRID_TEST.md). Requires one XInput physical controller and manual HidHide setup before any game test. This is not a verified PoE2 adapter.

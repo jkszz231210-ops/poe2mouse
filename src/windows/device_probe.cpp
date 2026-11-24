@@ -21,7 +21,7 @@ void slots(const char* stage) {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.17 | neutral virtual controller probe\n"
+    std::cout<<"PoE2Mouse 0.1.18 | neutral virtual controller probe\n"
         <<"Close all games. This test creates two devices and may send a small initialization axis then restore zero. Optional TEST sends diagnostic samples only.\n";
     if(argc!=2) {
         std::cout<<"Usage: device_probe.exe <absolute path to trusted x64 ViGEmClient.dll>\n";return 2;

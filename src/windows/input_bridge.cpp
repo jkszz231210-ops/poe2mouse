@@ -4,6 +4,8 @@
 #include "poe2mouse/diagnostics.hpp"
 #include "poe2mouse/bridge_labels.hpp"
 #include "poe2mouse/readback_monitor.hpp"
+#include "poe2mouse/hybrid_controller.hpp"
+#include <bit>
 #include <sstream>
 #include <algorithm>
 #include <commdlg.h>
@@ -27,6 +29,9 @@ unsigned old_key=0,old_mask=0;
 std::string config_error;
 HWND details=nullptr;
 PhysicalKeys physical_keys;
+HybridController hybrid;
+ULONG physical_slot=XUSER_MAX_COUNT;
+HWND role_label=nullptr;
 Diagnostics diagnostics;
 std::array<ULONG,2> assigned{XUSER_MAX_COUNT,XUSER_MAX_COUNT};
 std::uint64_t output_updates=0,output_failures=0,live_samples=0,live_mismatches=0,live_faults=0;
@@ -44,10 +49,29 @@ DWORD pending_pid=0;
 ULONGLONG release_deadline=0;
 unsigned released_ticks=0;
 const char* last_arm_result="not attempted";
-constexpr UINT_PTR monitor_timer=1,select_timer=2,release_timer=3;
+constexpr UINT_PTR monitor_timer=1,select_timer=2,release_timer=3,controller_timer=4;
 enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id,check_id,help_id,keys_id,driver_id,config_id,guide_id,preview_id,native_id,readback_id };
 enum : UINT { edit_list_id=200,edit_role_id,edit_apply_id,edit_new_id,edit_remove_id };
 void message(const wchar_t* s) { if(status) SetWindowTextW(status,s); }
+const wchar_t* controller_button_name(unsigned mask) {
+    switch(mask) {
+    case 0x0001:return L"十字键上"; case 0x0002:return L"十字键下";
+    case 0x0004:return L"十字键左"; case 0x0008:return L"十字键右";
+    case 0x0010:return L"Start"; case 0x0020:return L"Back";
+    case 0x0040:return L"L3"; case 0x0080:return L"R3";
+    case 0x0100:return L"LB"; case 0x0200:return L"RB";
+    case 0x1000:return L"A"; case 0x2000:return L"B";
+    case 0x4000:return L"X"; case 0x8000:return L"Y";
+    default:return L"自定义按键";
+    }
+}
+void refresh_role_label() {
+    if(!role_label) return;
+    std::wstring text=L"当前键鼠目标：P"+std::to_wstring(hybrid.active_player()+1)+
+        L" | 左摇杆：双人同步 | "+controller_button_name(options.controller_role_toggle)+
+        L"：切换角色 | 键鼠跟随当前角色";
+    SetWindowTextW(role_label,text.c_str());
+}
 bool prepare_sdk(HWND w);
 void prepare_dependencies(HWND w);
 bool load_configuration();
@@ -64,6 +88,15 @@ bool send(std::size_t p,PadReport r,bool force=false) {
     if(code!=success) { ++output_failures;diagnostics.record(Event::bridge_output_failed);result("E303 update",code);return false; }
     sent[p]=r;return true;
 }
+bool send_outputs() {
+    if(!session||!session->connected||session->closed) return false;
+    for(std::size_t p=0;p<2;++p) {
+        const auto keyboard=make_pad_report(engine.state()[p],padmap[p]);
+        const auto combined=merge_pad_reports(keyboard,hybrid.reports()[p]);
+        if(!send(p,combined)) return false;
+    }
+    return true;
+}
 bool raw_registration(bool enable,bool local=false) {
     RAWINPUTDEVICE devices[2]{};
     const DWORD flags=static_cast<DWORD>(enable?(local?RIDEV_DEVNOTIFY:(RIDEV_INPUTSINK|RIDEV_DEVNOTIFY)):RIDEV_REMOVE);
@@ -79,8 +112,8 @@ void stop(const wchar_t* reason) {
     if(armed) diagnostics.record(Event::bridge_paused);
     armed=false;preview=false; countdown=false;target=nullptr;target_pid=0;live_monitor.reset();
     pending_window=nullptr;pending_pid=0;released_ticks=0;release_deadline=0;
-    if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);KillTimer(self,release_timer);}
-    engine.reset();physical_keys.reset();refresh_preview();
+    if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);KillTimer(self,release_timer);KillTimer(self,controller_timer);}
+    engine.reset();physical_keys.reset();hybrid.reset_inputs();engine.set_active_player(hybrid.active_player());refresh_preview();
     const bool unregistered=!raw_registered||raw_registration(false);
     bool ok=true;
     for(std::size_t i=0;i<2;++i) if(session&&session->added[i]) {
@@ -101,16 +134,36 @@ void detach() {
         const bool ok=session->close();
         cleanup_failed=cleanup_failed||!ok;
         sent={};assigned={XUSER_MAX_COUNT,XUSER_MAX_COUNT};
+        physical_slot=XUSER_MAX_COUNT;hybrid.reset_role();engine.set_active_player(0);refresh_role_label();
         diagnostics.record(ok?Event::bridge_detached:Event::bridge_cleanup_failed);
         message(ok&&!cleanup_failed?L"设备已断开；原生键鼠可用。游戏侧单人模式需自行切换。":L"E209：设备清理失败，请检查 Windows 游戏控制器。");
     }
+}
+bool detect_physical_controller() {
+    unsigned mask{};
+    if(!connected_mask(mask)) {message(L"E210：XInput 设备枚举失败，请检查控制器驱动。");return false;}
+    if(std::popcount(mask)!=1) {
+        std::cout<<"E210: expected exactly one pre-existing XInput controller; mask=0x"<<std::hex<<mask<<std::dec<<"\n";
+        slot_snapshot();
+        message(mask==0?L"E210：未检测到实体 Xbox/XInput 手柄。请先连接手柄。":L"E210：检测到多个 XInput 设备。请关闭其他虚拟手柄工具，只保留一个实体手柄。");
+        return false;
+    }
+    physical_slot=static_cast<ULONG>(std::countr_zero(mask));
+    XINPUT_STATE state{};
+    if(XInputGetState(physical_slot,&state)!=ERROR_SUCCESS) {
+        physical_slot=XUSER_MAX_COUNT;message(L"E210：实体手柄读取失败，请重新连接。");return false;
+    }
+    std::cout<<"Physical XInput controller slot="<<physical_slot<<" detected before virtual devices\n";
+    return true;
 }
 bool attach() {
     if(!session||cleanup_failed) {message(L"E209：清理异常，请关闭软件并检查设备。");return false;}
     if(!config_ok) {message(L"E300：配置无效，请先检查配置。");return false;}
     if(!prepare_sdk(self)) return false;
     if(session->connected&&!session->closed) return true;
-    if(MessageBoxW(self,L"请确认全部游戏已关闭。连接时可能需要逐个发送一次微小摇杆测试值，再恢复全零；无按键或扳机输出。是否继续？",L"连接与初始化设备",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return false;
+    if(MessageBoxW(self,L"请先连接一个 Xbox/XInput 实体手柄，并关闭其他虚拟手柄软件。请确认全部游戏已关闭。连接时会创建两台虚拟手柄，并进行中立状态初始化。是否继续？",L"连接实体手柄与双虚拟手柄",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return false;
+    if(!detect_physical_controller()) return false;
+    hybrid.reset_role();engine.set_active_player(0);
     device_verified=false;
     if(!session->start()||!create_identified(*session,0)||!create_identified(*session,1)) {
         detach();message(L"E205/E206：创建或识别设备失败。检查控制台。");return false;
@@ -118,6 +171,11 @@ bool attach() {
     std::array<ULONG,2> index{};
     if(!distinct_slots(*session,index)) {
         detach();message(L"E206：两个设备槽位无效或重复。请反馈控制台的 P1/P2 编号与 XInput 列表。");return false;
+    }
+    XINPUT_STATE physical_state{};
+    if(physical_slot>=XUSER_MAX_COUNT||physical_slot==index[0]||physical_slot==index[1]||
+       XInputGetState(physical_slot,&physical_state)!=ERROR_SUCCESS) {
+        detach();message(L"E210：创建虚拟手柄后无法独立读取实体手柄。请检查 XInput 槽位和其他虚拟手柄软件。");return false;
     }
     if(!initialize_pair(*session)) {
         detach();message(L"E207：设备初始化或全零回读失败。已尝试释放设备，请反馈控制台。");return false;
@@ -147,6 +205,9 @@ bool ready_to_arm() {
         return arm_failure("E302-B devices unavailable",L"E302-B：设备未连接或清理异常，请检查连接。");
     if(!device_verified) return arm_failure("E302-C self-check required",L"E302-C：请先完成本次连接的设备输出自检。");
     if(!focus_hook) return arm_failure("E302-D focus monitor unavailable",L"E302-D：焦点监控不可用。");
+    XINPUT_STATE physical_state{};
+    if(physical_slot>=XUSER_MAX_COUNT||XInputGetState(physical_slot,&physical_state)!=ERROR_SUCCESS)
+        return arm_failure("E302-L physical XInput controller missing",L"E302-L：实体 XInput 手柄已断开或不可读取。");
     return true;
 }
 bool relevant_keys_down() {
@@ -180,9 +241,14 @@ bool arm(HWND w) {
         stop(L"已暂停。");
         return arm_failure("E302-G monitor timer failed",L"E302-G：无法启动焦点监控。");
     }
+    if(!SetTimer(self,controller_timer,8,nullptr)) {
+        stop(L"已暂停。");
+        return arm_failure("E302-M controller poll timer failed",L"E302-M：无法启动手柄读取计时器。");
+    }
     last_arm_result=w==self?"PASS local":"PASS external";
     std::cout<<"Arm: "<<last_arm_result<<"\n";
-    message(w==self?L"真实设备测试：按住 W、方向键、Q、Shift+Q，观察实际回读。F10 或切出窗口暂停。":L"已启用指定窗口。返回本软件即暂停。");
+    refresh_role_label();
+    message(w==self?L"混合测试已启用：左摇杆同时移动两人；Back 切换当前角色；手柄其他按键和键鼠跟随当前角色。F10 或切出窗口暂停。":L"混合输入已启用。左摇杆共享移动，Back 切换角色，手柄其他按键和键鼠跟随当前角色。返回本软件即暂停。");
     if(w==self) live_readback();
     return true;
 }
@@ -228,11 +294,22 @@ void input(unsigned k,bool down) {
     if(k==options.pause_key) {if(down) stop(L"原生键鼠模式：映射已停止。恢复映射需重新启用测试窗口。");return;}
     if(!engine.input(k,down)) return;
     if(preview) {refresh_preview();return;}
-    for(std::size_t p=0;p<2;++p) {
-        if(!send(p,make_pad_report(engine.state()[p],padmap[p]))) {
-            stop(L"E303：输出失败，请先检查设备再启用。");break;
-        }
+    if(!send_outputs()) stop(L"E303：输出失败，请先检查设备再启用。");
+}
+void poll_controller() {
+    if(!armed||!session||!session->connected||physical_slot>=XUSER_MAX_COUNT) return;
+    XINPUT_STATE state{};
+    if(XInputGetState(physical_slot,&state)!=ERROR_SUCCESS) {
+        stop(L"E210：实体手柄已断开，双虚拟手柄已归零。重新连接后请重新启用。");return;
     }
+    const auto& g=state.Gamepad;
+    const PhysicalPadState sample{
+        g.wButtons,g.bLeftTrigger,g.bRightTrigger,g.sThumbLX,g.sThumbLY,g.sThumbRX,g.sThumbRY};
+    if(!hybrid.update(sample,static_cast<std::uint16_t>(options.controller_role_toggle))) return;
+    engine.set_active_player(hybrid.active_player());
+    refresh_role_label();
+    std::cout<<"Active role: P"<<hybrid.active_player()+1<<"\n";
+    if(!send_outputs()) stop(L"E303：手柄输出失败，已暂停并归零。");
 }
 void physical(std::uintptr_t device,std::uint32_t token,unsigned key,bool down) {
     if(!armed&&!preview) return;
@@ -287,6 +364,8 @@ void copy_diagnostics(HWND w) {
         <<"config_ok: "<<config_ok<<"\nsdk_ready: "<<sdk_ready<<"\n"
         <<"armed: "<<armed<<"\nconnected: "<<(session&&session->connected)<<"\n"
         <<"p1_xinput_slot: "<<assigned[0]<<"\np2_xinput_slot: "<<assigned[1]<<"\n"
+        <<"physical_xinput_slot: "<<physical_slot<<"\nactive_role: P"<<hybrid.active_player()+1<<"\n"
+        <<"role_toggle_button_mask: "<<options.controller_role_toggle<<"\nkeyboard_follow_active: "<<options.keyboard_follow_active<<"\n"
         <<"slot 4 means detached/unknown\noutput_updates: "<<output_updates<<"\noutput_failures: "<<output_failures<<"\n"
         <<"cleanup_failed: "<<cleanup_failed<<"\nraw_registered: "<<raw_registered<<"\n";
     diagnostics.write(out);
@@ -731,11 +810,11 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
                 reinterpret_cast<HMENU>(static_cast<UINT_PTR>(id)),inst,nullptr);
             SendMessageW(h,WM_SETFONT,reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)),TRUE);
         };
-        label(L"PoE2Mouse 工程测试版 | 尚未验证游戏内兼容性",15,12,610,24);
+        label(L"PoE2Mouse 混合输入 MVP | 尚未验证游戏内兼容性",15,12,610,24);
         label(L"首次使用：点新手引导，按照步骤操作。无需游戏即可预览。",15,43,610,25);
         button(L"新手引导 / 下一步",15,77,guide_id);
         button(L"2. 检查依赖",215,77,check_id);
-        button(L"3. 连接两个设备",415,77,attach_id);
+        button(L"3. 连接手柄 + 双虚拟设备",415,77,attach_id);
         button(L"中文键位 / 改键",15,120,keys_id);
         button(L"离线预览（无驱动）",215,120,preview_id);
         button(L"选择测试窗口（3秒）",415,120,external_id);
@@ -746,14 +825,15 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         button(L"重新读取配置",215,206,config_id);
         button(L"原生键鼠模式（暂停）",415,206,native_id);
         button(L"完整教程",15,249,help_id);
-        button(L"真实设备本窗测试",215,249,self_id);
+        button(L"启用混合输入测试",215,249,self_id);
         button(L"设备输出自检",415,249,readback_id);
         guide_label=label(L"引导：点击新手引导开始；可以随时使用离线预览。",15,294,610,55);
-        preview_label=label(L"离线预览：未启用。",15,354,610,90);
-        status=label(config_ok?L"状态：尚未连接。请从新手教程开始。":L"E300：配置无效；仍可查看帮助和反馈。",15,451,610,58);
+        role_label=label(L"当前键鼠目标：P1 | 左摇杆：双人同步 | Back：切换角色 | 键鼠跟随当前角色",15,354,610,25);
+        preview_label=label(L"离线预览：未启用。",15,383,610,70);
+        status=label(config_ok?L"状态：尚未连接。请从新手教程开始。":L"E300：配置无效；仍可查看帮助和反馈。",15,459,610,58);
         label(L"暂停/原生键鼠：保留设备并归零；断开：释放设备但不退出软件。\r\n"
-              L"切出窗口自动暂停。原生界面快捷键使用前请先暂停映射；游戏能否混合输入待验证。\r\n"
-              L"问题反馈：点击复制诊断，再附复现步骤。",15,515,610,80);
+              L"切出窗口自动暂停。Back 默认切换当前角色；F10 暂停映射。\r\n"
+              L"问题反馈：点击复制诊断，再附复现步骤。",15,525,610,80);
         focus_hook=SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,nullptr,focus_changed,0,0,WINEVENT_OUTOFCONTEXT);
         if(!focus_hook) {std::cout<<"E302 focus hook: "<<GetLastError()<<"\n";return -1;}
         return 0;
@@ -787,6 +867,9 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
             begin_release_wait(w);
         } else if(wp==release_timer&&pending_window) {
             advance_release_wait();
+        } else if(wp==controller_timer&&armed) {
+            if(!valid_focus()) stop(L"已暂停：目标窗口失去焦点。");
+            else poll_controller();
         } else if(wp==monitor_timer&&(armed||preview)) {
             if(!valid_focus()) stop(L"已暂停：目标窗口失去焦点。");
             else if(armed&&target==self) live_readback();
@@ -825,13 +908,17 @@ bool load_configuration() {
               independent_profile(p,next,config_error)&&
               load(folder,L"bridge.options",L"bridge.default.options",next_options,read_bridge_options)&&
               bridge_options_ok(p,next_options,config_error);
-    if(config_ok) {current_profile=p;padmap=next;options=next_options;engine.set_profile(p);diagnostics.record(Event::profile_loaded);}
+    if(config_ok) {
+        current_profile=p;padmap=next;options=next_options;engine.set_profile(p);
+        engine.set_active_player(hybrid.active_player());engine.set_follow_active(options.keyboard_follow_active);
+        refresh_role_label();diagnostics.record(Event::profile_loaded);
+    }
     else {engine.reset();diagnostics.record(Event::profile_invalid);std::cout<<"E300: "<<config_error<<"\n";}
     return config_ok;
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.17 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.18 hybrid XInput bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -845,7 +932,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.17 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.18 - 混合手柄测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

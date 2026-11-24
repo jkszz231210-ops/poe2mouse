@@ -61,3 +61,11 @@ Office live input milestone (user-reported v0.1.16, 2026-11-24): all nine manual
 0.1.17: user reports repeated external selection E302 in v0.1.16 (PM-025). Add explicit preflight, bounded release wait, pinned foreground window and per-cause diagnostics; no change to verified device backend. CI and external-window runtime pending.
 
 Home v0.1.17 runtime evidence (user console, 2026-11-24): distinct slots and both neutral initialization/readback PASS; pre-check E302-C correctly blocks arming; after self-check local arm, external arm, then local re-arm all PASS. Target application unspecified; actual external input reception, game controls and performance remain open. No code changes for this milestone.
+
+
+## v0.1.18 hybrid controller MVP
+- Implemented pure hybrid routing core: physical left stick shared to P1/P2, right stick/buttons/triggers/D-pad to active role, configurable Back/View role toggle, radial deadzones, saturating merge with keyboard state.
+- Keyboard P1 bindings follow active role by default; explicit P2 modifier-layer bindings remain fixed P2. Schema 1 options remain compatible; schema 2 adds controller toggle and follow-active flag.
+- Windows bridge reads exactly one pre-existing XInput controller before creating virtual pads; timer-driven XInput polling only while explicitly armed. Disconnect/focus loss/F10 neutralize both virtual outputs.
+- HidHide is a manual prerequisite for game testing so the game sees only two virtual controllers; no driver install or device hiding changes are automated.
+- CI pending; XInput hardware test, HidHide setup, PoE2 player assignment, game rules and performance unverified.
