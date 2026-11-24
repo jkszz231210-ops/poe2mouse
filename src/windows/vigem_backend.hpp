@@ -91,13 +91,41 @@ struct Session {
 inline bool assigned_slot(Session& s,std::size_t pad,ULONG& slot) {
     for(unsigned retry=0;retry<20;++retry) {
         const auto err=s.api.user_index(s.client,s.pads[pad],&slot);
-        if(err==success && slot<XUSER_MAX_COUNT) { result("user_index",err); return true; }
+        if(err==success && slot<XUSER_MAX_COUNT) { std::cout<<"P"<<pad+1<<" SDK user_index="<<slot<<"\n"; return true; }
         Sleep(50);
     }
     std::cout<<"E206: SDK did not return a valid XInput index\n"; return false;
 }
+inline void slot_snapshot() {
+    for(DWORD i=0;i<XUSER_MAX_COUNT;++i) {
+        XINPUT_STATE s{};const auto code=XInputGetState(i,&s);
+        const auto& g=s.Gamepad;
+        std::cout<<"XInput slot "<<i<<": code="<<code;
+        if(code==ERROR_SUCCESS) std::cout<<" buttons="<<g.wButtons<<" lt="<<static_cast<unsigned>(g.bLeftTrigger)
+          <<" rt="<<static_cast<unsigned>(g.bRightTrigger)<<" lx="<<g.sThumbLX<<" ly="<<g.sThumbLY
+          <<" rx="<<g.sThumbRX<<" ry="<<g.sThumbRY;
+        std::cout<<"\n";
+    }
+}
+inline bool distinct_slots(Session& s,std::array<ULONG,2>& index) {
+    // Device enumeration can complete after the bus accepts the add request.
+    Error a{},b{};
+    for(unsigned retry=0;retry<50;++retry) {
+        index.fill(XUSER_MAX_COUNT);
+        a=s.api.user_index(s.client,s.pads[0],&index[0]);
+        b=s.api.user_index(s.client,s.pads[1],&index[1]);
+        if(a==success&&b==success&&index[0]<XUSER_MAX_COUNT&&index[1]<XUSER_MAX_COUNT&&index[0]!=index[1]) {
+            std::cout<<"Assigned P1="<<index[0]<<" P2="<<index[1]<<" after "<<retry*100u<<" ms\n";
+            return true;
+        }
+        Sleep(100);
+    }
+    result("P1 user_index",a);result("P2 user_index",b);
+    std::cout<<"E206: P1="<<index[0]<<" P2="<<index[1]<<" (must be distinct 0..3)\n";
+    slot_snapshot();return false;
+}
 inline bool matches(DWORD slot,const Report& expected) {
-    for(unsigned retry=0;retry<20;++retry) {
+    for(unsigned retry=0;retry<80;++retry) {
         XINPUT_STATE s{};
         if(XInputGetState(slot,&s)==ERROR_SUCCESS) {
             const auto& g=s.Gamepad;
@@ -106,11 +134,12 @@ inline bool matches(DWORD slot,const Report& expected) {
         }
         Sleep(25);
     }
-    return false;
+    std::cout<<"XInput state mismatch at slot "<<slot<<"\n";
+    slot_snapshot();return false;
 }
 inline bool readback(Session& s) {
     std::array<ULONG,2> index{};
-    if(!assigned_slot(s,0,index[0])||!assigned_slot(s,1,index[1])||index[0]==index[1]) {
+    if(!distinct_slots(s,index)) {
         std::cout<<"E206: slot assignment unavailable or not distinct\n";return false;
     }
     std::cout<<"Assigned slots: "<<index[0]<<" and "<<index[1]<<"\n";

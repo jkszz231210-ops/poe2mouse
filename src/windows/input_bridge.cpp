@@ -102,9 +102,11 @@ bool attach() {
         detach();message(L"E205：创建设备失败。检查驱动及控制台。");return false;
     }
     std::array<ULONG,2> index{};
-    if(!assigned_slot(*session,0,index[0])||!assigned_slot(*session,1,index[1])||index[0]==index[1]||
-        !matches(index[0],{})||!matches(index[1],{})) {
-        detach();message(L"E206/E207：设备回读失败。请复制诊断并附控制台。");return false;
+    if(!distinct_slots(*session,index)) {
+        detach();message(L"E206：两个设备槽位无效或重复。请反馈控制台的 P1/P2 编号与 XInput 列表。");return false;
+    }
+    if(!matches(index[0],{})||!matches(index[1],{})) {
+        detach();message(L"E207：设备中立状态回读失败。请反馈控制台 XInput 列表。");return false;
     }
     sent={};assigned=index;diagnostics.record(Event::bridge_attached);
     std::cout<<"P1 XInput slot="<<index[0]<<" P2 XInput slot="<<index[1]<<"\n";
@@ -192,7 +194,7 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.11\n"
+    out<<"PoE2Mouse bridge 0.1.12\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
         <<"config_ok: "<<config_ok<<"\nsdk_ready: "<<sdk_ready<<"\n"
         <<"armed: "<<armed<<"\nconnected: "<<(session&&session->connected)<<"\n"
@@ -598,7 +600,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         else if(LOWORD(wp)==driver_id) {stop(L"已暂停。");open_url(w,L"https://github.com/jkszz231210-ops/poe2mouse/blob/dev/bootstrap/docs/DEVICE_PROBE.md");}
         else if(LOWORD(wp)==config_id) {stop(L"已暂停。");load_configuration();refresh_bindings();message(config_ok?L"配置已读取。请查看当前键位并重新启用。":L"E300：配置无效，请查看当前键位中的错误并修复。");}
         else if(LOWORD(wp)==stop_id) stop(L"已手动暂停。");
-        else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"E205: Connect unsuccessful\n";}
+        else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"Attach unsuccessful; see detailed error above.\n";}
         else if(LOWORD(wp)==detach_id) detach();
         else if(LOWORD(wp)==report_id) {stop(L"已暂停以生成报告。");copy_diagnostics(w);}
         else if(LOWORD(wp)==self_id) {if(!arm(w)) std::cout<<"E302: Cannot arm this window; check connection, focus and released keys.\n";}
@@ -655,7 +657,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.11 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.12 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -669,7 +671,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.11 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.12 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}
