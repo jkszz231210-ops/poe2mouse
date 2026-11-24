@@ -1,0 +1,11 @@
+/build/
+/out/
+/dist/
+/.vs/
+/.idea/
+CMakeUserPresets.json
+*.user
+*.pdb
+*.obj
+*.log
+/config/local/

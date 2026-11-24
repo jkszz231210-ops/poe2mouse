@@ -1,11 +1,32 @@
 # PoE2Mouse
+Windows-native keyboard and mouse input management research for local co-op. Primary goal: a single physical keyboard and mouse for two characters, preserving native keyboard/mouse interaction when supported. Physical controllers are optional.
 
-Windows-native keyboard and mouse input management research for local co-op. Project goal: preserve keyboard/mouse ergonomics, configurable controls and portable profiles, with independent game compatibility adapters.
+## v0.1.11 test lab
+Self-contained local two-character movement and action simulator, portable C++20 state engine, profile import/export/reload and Windows packaging. **This is not a PoE2 game adapter and cannot control characters in the actual game.** It only accepts foreground input in its own window.
 
-## Status
+Download the Windows test package from a successful [Actions run](https://github.com/jkszz231210-ops/poe2mouse/actions) on dev/bootstrap. Unzip all files and run input_lab.exe. See HOME_TEST.md and [中文使用与反馈说明](docs/FEEDBACK.md). Help menu can copy or save a bounded diagnostic report; no automatic logs or uploads. No driver, Python or third-party runtime dependencies for this lab; Windows runtime verification remains pending.
 
-Early development. No verified PoE2 integration or production-ready executable. The first implementation targets a self-contained local test application; game-facing behavior requires separate compatibility validation.
+## Build
+CMake 3.22+ and C++20 compiler. Windows: Visual Studio 2022 Desktop development with C++.
+```powershell
+cmake -S . -B build
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+cmake --install build --config Release --prefix dist
+```
+On Windows the dist folder contains the portable test application. Defaults live in lab.default.profile; user imports are saved to lab.profile, which takes precedence and is never shipped in the new archive. Schema 1/2 remain readable; schema 3 adds separate skill slots and modifier chords. Profile > Edit bindings is a native text editor with validation and persistence. See [binding model](docs/BINDINGS.md). Use Help > Check input devices for a read-only device snapshot.
 
-## Engineering priorities
+See [engineering contract](AGENTS.md), [architecture](docs/ARCHITECTURE.md), [status](docs/STATUS.md) and [home test guide](docs/HOME_TEST.md).
 
-C++20, CMake, event-driven input, no background rendering or network service, no game memory access or injection. Configuration is versioned and portable. Game versions, application releases and profile schema versions are independent. Changes must include regression tests and accurately report verification status.
+Optional Windows `device_probe.exe` validates creation/removal of two neutral virtual devices using a user-supplied trusted SDK DLL and driver. See [device probe instructions](docs/DEVICE_PROBE.md). It does not send game actions. The primary WASD skill bar reference is eight keys; five additional logical labels are optional and native availability is unverified.
+
+Device probe now optionally validates actual diagnostic axis samples, distinct XInput indices and neutral recovery, one device at a time with games closed. See [reference study](docs/REFERENCE_STUDY.md).
+Experimental independent input bridge: [BRIDGE_TEST.md](docs/BRIDGE_TEST.md). Real Raw Input to virtual-controller report path, explicit target window, no shared bindings or game-specific mappings. Requires a separately supplied driver and SDK DLL. Not a verified playable PoE2 release.
+
+[Release acceptance checklist](docs/ACCEPTANCE.md): native targeting first, disconnect/reconnect without exit, trade, crash recovery, feedback and performance. The bridge starts with devices detached; all transitions remain unverified on real Windows hardware.
+
+See [issue ledger](docs/ISSUE_LOG.md). 0.1.9 adds manual full controller test controls, held-key aggregation and bridge diagnostic copy. Real driver/game compatibility still pending.
+
+**Start here:** [中文快速开始](docs/QUICK_START.md). Main executable `input_bridge.exe` opens even without SDK/driver. Embedded tutorial, explicit dependency check, actual binding view and reload. No verified game compatibility yet.
+
+0.1.11: in-app guided steps, same-profile driver-free preview, Chinese binding editor and explicit native pause (F10 by default), see [native UI notes](docs/NATIVE_UI.md). No game UI detection or automation.
