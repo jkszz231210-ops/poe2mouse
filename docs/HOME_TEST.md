@@ -1,4 +1,4 @@
-# Home test: v0.1.1 local lab
+# Home test: v0.1.2 local lab
 This package does not connect to PoE2, install drivers, send external inputs or need a compiler. Extract all files together into a writable folder on D:. Start input_lab.exe. Windows interactive testing is still required.
  
 1. Hold WASD: both colored markers move, at intentionally different speeds. Observe divergence and the obstacle.
@@ -9,3 +9,5 @@ This package does not connect to PoE2, install drivers, send external inputs or 
  
 ## Separate PoE2 native compatibility observations (manual, no lab connection)
 Use existing characters and the game's supported couch co-op menu. Record game version, region and client type. Check whether a physical keyboard/mouse can control P1 while your existing physical controller is assigned to P2; check native input hot switching, P1/P2 independence, inventory interaction and whether reconnect changes assignment. Record only observations. No game-facing adapter is present in this package.
+
+6. Help > Copy diagnostic report: paste into Notepad and verify app version, event counts and lack of raw input or paths. Save diagnostics.txt twice; confirm only one report file exists. See FEEDBACK.md for Chinese instructions.

@@ -1,5 +1,6 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
+#include "poe2mouse/diagnostics.hpp"
 #include <iostream>
 #include <cstdlib>
 using namespace pm;
@@ -66,5 +67,17 @@ int main() {
     right[0][static_cast<unsigned>(Action::right)]=1;
     for(int i=0;i<100;++i) arena.step(right,0.05);
     check(arena.positions()[0].x<=205-Arena::radius,"wall collision");
+    Diagnostics d;
+    d.record(Event::startup_ok);
+    for(std::size_t i=0;i<1000;++i) d.record(Event::focus_reset);
+    d.record(Event::profile_invalid);
+    check(d.size()==Diagnostics::capacity,"diagnostic ring bounded");
+    std::ostringstream report;
+    d.write(report);
+    const auto output=report.str();
+    check(output.find("focus_reset: 1000")!=std::string::npos,"aggregate count retained");
+    check(output.ends_with("  profile_invalid\n"),"recent event ordering");
+    check(output.size()<4096,"bounded report size");
+    check(output.find("  startup_ok\n")==std::string::npos,"oldest event evicted");
     std::cout << "All core checks passed\n";
 }

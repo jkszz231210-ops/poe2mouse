@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(poe2mouse VERSION 0.1.1 LANGUAGES CXX)
+project(poe2mouse VERSION 0.1.2 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -31,5 +31,5 @@ if(WIN32)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
     "${CMAKE_CURRENT_SOURCE_DIR}/profiles/lab.profile" "$<TARGET_FILE_DIR:input_lab>/lab.profile")
   install(TARGETS input_lab RUNTIME DESTINATION .)
-  install(FILES profiles/lab.profile docs/HOME_TEST.md DESTINATION .)
+  install(FILES profiles/lab.profile docs/HOME_TEST.md docs/FEEDBACK.md DESTINATION .)
 endif()

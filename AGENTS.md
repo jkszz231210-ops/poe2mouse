@@ -7,3 +7,8 @@
 - Default offline. No telemetry, cache or logs unless explicitly needed; no persistent input history. Keep generated files out of Git. Use bounded backups and atomic replacement when implementing writable profiles.
 - Never claim untested game compatibility. Record application version, adapter version, schema version and test evidence separately.
 - Use focused commits, preserve existing behavior, build and run CTest, document unverified cases. Do not merge main without review.
+
+## Release priorities
+1. Functionality and reproducible usage: get the smallest real feature working, explicitly state limitations, supply a concise Chinese quick-start and recovery instructions.
+2. Feedback and observability are release gates from the first testable build: stable error identifiers, privacy-safe bounded diagnostics, minimal reproduction instructions, and regression tests for confirmed defects. No automatic upload or raw keystroke logging. Diagnostics should be exportable without installing development tools.
+3. After repeated real usage, prioritize ergonomics and counterintuitive bindings, configuration migration and stability. Cosmetic polish follows functional validation.

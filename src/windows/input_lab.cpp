@@ -6,8 +6,12 @@
 #include <chrono>
 #include <string>
 #include "poe2mouse/arena.hpp"
+#include "poe2mouse/diagnostics.hpp"
+#include <sstream>
+#include <cstring>
 namespace {
 pm::Engine engine;
+pm::Diagnostics diagnostics;
 pm::Arena arena;
 pm::Profile profile{};
 std::filesystem::path profile_path;
@@ -15,12 +19,13 @@ using Clock=std::chrono::steady_clock;
 Clock::time_point last;
 bool ticking=false;
 constexpr UINT_PTR timer_id=1;
-enum : UINT { import_id=100,export_id,reload_id,reset_id };
+enum : UINT { import_id=100,export_id,reload_id,reset_id,report_id,copy_id,help_id };
 void clock_state(HWND w) {
     const bool want=pm::Arena::moving(engine.state());
     if(want && !ticking) {
         last=Clock::now();
         ticking=SetTimer(w,timer_id,16,nullptr)!=0;
+        if(!ticking) diagnostics.record(pm::Event::timer_failed);
     } else if(!want && ticking) {
         KillTimer(w,timer_id); ticking=false;
     }
@@ -37,7 +42,7 @@ void text(HDC dc,int x,int y,const wchar_t* t) { TextOutW(dc,x,y,t,lstrlenW(t));
 void draw(HDC dc,RECT area) {
     FillRect(dc,&area,reinterpret_cast<HBRUSH>(COLOR_WINDOW+1));
     SetBkMode(dc,TRANSPARENT);
-    text(dc,20,15,L"PoE2Mouse 0.1.1 | Offline two-character input lab");
+    text(dc,20,15,L"PoE2Mouse 0.1.2 | Offline two-character input lab");
     text(dc,20,39,L"WASD: both  |  Arrows: P2  |  L/R mouse: separate attacks (defaults)");
     RECT field{20,70,480,260}; FrameRect(dc,&field,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
     RECT wall{225,112,275,218}; FillRect(dc,&wall,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
@@ -67,7 +72,7 @@ void draw(HDC dc,RECT area) {
         }
         SetTextColor(dc,RGB(0,0,0));
     }
-    text(dc,20,449,L"Profile menu: import, export, reload. No input is sent outside this window.");
+    text(dc,20,449,L"Profile: import/export/reload. Help: usage and diagnostics. Offline lab only.");
 }
 bool load(const std::filesystem::path& path,pm::Profile& result) {
     std::ifstream in(path); std::string error;
@@ -91,13 +96,71 @@ bool save(const std::filesystem::path& path,const pm::Profile& p) {
     return ok;
 }
 void notify(HWND w,const wchar_t* msg) { MessageBoxW(w,msg,L"PoE2Mouse",MB_OK|MB_ICONINFORMATION); }
+std::string make_report() {
+    std::ostringstream out;
+    SYSTEM_INFO sys{}; GetNativeSystemInfo(&sys);
+    MEMORYSTATUSEX memory{}; memory.dwLength=sizeof(memory);
+    out << "PoE2Mouse diagnostic report\n"
+        << "app_version: 0.1.2\nprofile_schema: 1\ngame_adapter: none (offline lab)\n"
+        << "logical_processors: " << sys.dwNumberOfProcessors << '\n';
+    if(GlobalMemoryStatusEx(&memory))
+        out << "physical_memory_mib: " << memory.ullTotalPhys/1048576ULL << '\n';
+    std::size_t bindings=0;
+    for(const auto& b:profile) if(b.target!=pm::Target::none) ++bindings;
+    out << "configured_bindings: " << bindings << '\n';
+    diagnostics.write(out);
+    out << "\nPlease add: game/client version (if relevant), steps, expected result, actual result, reproducibility.\n"
+        << "No raw input, profile keys, paths, account names or chat included.\n";
+    return out.str();
+}
+bool copy_report(HWND w,const std::string& report) {
+    // Report is generated from ASCII constants and numeric counters only.
+    HGLOBAL h=GlobalAlloc(GMEM_MOVEABLE,(report.size()+1)*sizeof(wchar_t));
+    if(!h) return false;
+    auto* dest=static_cast<wchar_t*>(GlobalLock(h));
+    if(!dest) { GlobalFree(h); return false; }
+    for(std::size_t i=0;i<report.size();++i) dest[i]=static_cast<wchar_t>(static_cast<unsigned char>(report[i]));
+    dest[report.size()]=L'\0'; GlobalUnlock(h);
+    if(!OpenClipboard(w)) { GlobalFree(h); return false; }
+    bool ok=EmptyClipboard()!=0 && SetClipboardData(CF_UNICODETEXT,h)!=nullptr;
+    CloseClipboard();
+    if(!ok) GlobalFree(h);
+    return ok;
+}
+bool write_report(const std::string& report) {
+    // Only explicit user export writes a single, bounded report beside the executable.
+    const auto target=profile_path.parent_path()/L"diagnostics.txt";
+    wchar_t temp[MAX_PATH]{};
+    if(!GetTempFileNameW(target.parent_path().c_str(),L"p2d",0,temp)) return false;
+    bool ok=false;
+    {
+        std::ofstream out{std::filesystem::path(temp),std::ios::binary|std::ios::trunc};
+        out << report; out.close(); ok=static_cast<bool>(out);
+    }
+    if(ok) ok=MoveFileExW(temp,target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH)!=0;
+    if(!ok) DeleteFileW(temp);
+    return ok;
+}
 void file_command(HWND w,UINT id) {
+    if(id==help_id) {
+        clear(w);
+        notify(w,L"Offline lab only. WASD: both; arrows: P2; left/right mouse: independent attacks; Q/E: skills; Space: dodge. Edit or import lab.profile. For issues, use Help > Copy diagnostic report, then paste it with reproduction steps into GitHub Issues or your support chat. See HOME_TEST.md and FEEDBACK.md.");
+        return;
+    }
+    if(id==report_id || id==copy_id) {
+        const auto report=make_report();
+        clear(w);
+        const bool ok=id==report_id?write_report(report):copy_report(w,report);
+        notify(w,ok?(id==report_id?L"Saved diagnostics.txt beside the executable.":L"Diagnostic report copied. Paste into your support chat or issue."):L"Export failed. Try copying the report or use a writable folder.");
+        return;
+    }
+    if(id!=reset_id && id!=reload_id && id!=import_id && id!=export_id) return;
     clear(w);
-    if(id==reset_id) { arena.reset(); InvalidateRect(w,nullptr,FALSE); return; }
+    if(id==reset_id) { diagnostics.record(pm::Event::arena_reset); arena.reset(); InvalidateRect(w,nullptr,FALSE); return; }
     if(id==reload_id) {
         pm::Profile next{};
-        if(load(profile_path,next)) { profile=next; engine.set_profile(profile); notify(w,L"Profile reloaded."); }
-        else notify(w,L"Invalid or missing profile. Previous configuration retained.");
+        if(load(profile_path,next)) { diagnostics.record(pm::Event::profile_loaded); profile=next; engine.set_profile(profile); notify(w,L"Profile reloaded."); }
+        else { diagnostics.record(pm::Event::profile_invalid); notify(w,L"Invalid or missing profile. Previous configuration retained."); }
         return;
     }
     wchar_t file[MAX_PATH]{};
@@ -107,11 +170,12 @@ void file_command(HWND w,UINT id) {
     dlg.Flags=OFN_NOCHANGEDIR|OFN_PATHMUSTEXIST|(id==import_id?OFN_FILEMUSTEXIST:OFN_OVERWRITEPROMPT);
     const bool selected=(id==import_id?GetOpenFileNameW(&dlg):GetSaveFileNameW(&dlg))!=FALSE;
     if(!selected) return;
-    if(id==export_id) { notify(w,save(file,profile)?L"Profile exported.":L"Export failed."); return; }
+    if(id==export_id) { const bool ok=save(file,profile); diagnostics.record(ok?pm::Event::profile_exported:pm::Event::profile_write_failed); notify(w,ok?L"Profile exported.":L"Export failed."); return; }
     pm::Profile next{};
-    if(!load(file,next)) { notify(w,L"Invalid profile. Previous configuration retained."); return; }
-    if(!save(profile_path,next)) { notify(w,L"Could not save profile. Previous configuration retained."); return; }
+    if(!load(file,next)) { diagnostics.record(pm::Event::profile_invalid); notify(w,L"Invalid profile. Previous configuration retained."); return; }
+    if(!save(profile_path,next)) { diagnostics.record(pm::Event::profile_write_failed); notify(w,L"Could not save profile. Previous configuration retained."); return; }
     profile=next; engine.set_profile(profile);
+    diagnostics.record(pm::Event::profile_imported);
     notify(w,L"Profile imported, saved and applied.");
 }
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
@@ -132,7 +196,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     case WM_XBUTTONUP: key(w,HIWORD(wp)==XBUTTON1?VK_XBUTTON1:VK_XBUTTON2,false);
         if(!(LOWORD(wp)&(MK_LBUTTON|MK_RBUTTON|MK_MBUTTON|MK_XBUTTON1|MK_XBUTTON2))) ReleaseCapture();
         return TRUE;
-    case WM_KILLFOCUS: case WM_CANCELMODE: case WM_ENTERMENULOOP: clear(w); if(GetCapture()==w) ReleaseCapture(); return 0;
+    case WM_KILLFOCUS: case WM_CANCELMODE: case WM_ENTERMENULOOP: diagnostics.record(pm::Event::focus_reset); clear(w); if(GetCapture()==w) ReleaseCapture(); return 0;
     case WM_CAPTURECHANGED:
         if(lp!=reinterpret_cast<LPARAM>(w))
             for(unsigned code:{VK_LBUTTON,VK_RBUTTON,VK_MBUTTON,VK_XBUTTON1,VK_XBUTTON2}) key(w,code,false);
@@ -159,19 +223,28 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0 || n>=std::size(path)) return 1;
     profile_path=std::filesystem::path(path).parent_path()/L"lab.profile";
-    if(!load(profile_path,profile)) { notify(nullptr,L"Cannot load lab.profile."); return 1; }
+    if(!load(profile_path,profile)) {
+        diagnostics.record(pm::Event::startup_profile_failed);
+        copy_report(nullptr,make_report());
+        notify(nullptr,L"E101: Cannot load lab.profile. Restore the original profile beside the executable. A report was attempted on the clipboard; see FEEDBACK.md."); return 1;
+    }
+    diagnostics.record(pm::Event::startup_ok);
     engine.set_profile(profile);
     WNDCLASSW wc{}; wc.hInstance=instance; wc.lpfnWndProc=proc;
     wc.lpszClassName=L"PoE2MouseLab"; wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
     if(!RegisterClassW(&wc)) return 1;
-    HMENU menu=CreateMenu(),sub=CreatePopupMenu();
-    if(!menu || !sub) { if(menu) DestroyMenu(menu); if(sub) DestroyMenu(sub); return 1; }
+    HMENU menu=CreateMenu(),sub=CreatePopupMenu(),help=CreatePopupMenu();
+    if(!menu || !sub || !help) { if(menu) DestroyMenu(menu); if(sub) DestroyMenu(sub); if(help) DestroyMenu(help); return 1; }
     AppendMenuW(sub,MF_STRING,import_id,L"Import profile...");
     AppendMenuW(sub,MF_STRING,export_id,L"Export profile...");
     AppendMenuW(sub,MF_STRING,reload_id,L"Reload profile");
     AppendMenuW(sub,MF_STRING,reset_id,L"Reset arena");
     AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(sub),L"Profile");
-    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.1",
+    AppendMenuW(help,MF_STRING,help_id,L"How to use / report a problem");
+    AppendMenuW(help,MF_STRING,copy_id,L"Copy diagnostic report");
+    AppendMenuW(help,MF_STRING,report_id,L"Save diagnostics.txt");
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(help),L"Help");
+    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.2",
         WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,720,560,nullptr,menu,instance,nullptr);
     if(!w) { DestroyMenu(menu); return 1; }
     ShowWindow(w,show);
