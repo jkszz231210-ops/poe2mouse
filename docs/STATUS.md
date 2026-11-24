@@ -50,3 +50,5 @@ Office evidence: 0.1.11 joy.cpl shows two controllers; XInput slots 0/1 connecte
 0.1.13 Windows/Linux CI success: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45350595952 . 0.1.14 adds current-state monitor only during explicit local test; not a gameplay polling loop. Windows runtime pending.
 
 0.1.14 Windows/Linux CI passed https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45351492586 . 0.1.15 adds opt-in dependency preparation script and UI entry. Network download/install runtime pending; no automatic install or policy bypass.
+
+0.1.15 office: E206 resolved (observed XInput slots 0/1, SDK both 0); E207 exact neutral failed on both with identical axis offsets. PM-022 adds explicit opt-in setup initialization and strict exact-neutral readback, pending CI/runtime. No game compatibility claims.

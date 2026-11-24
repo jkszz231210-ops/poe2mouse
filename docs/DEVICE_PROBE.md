@@ -18,3 +18,5 @@ device_probe.exe 是独立的原生 C++ 设备生命周期测试。创建两个 
 ## 0.1.15 一键准备
 主界面按钮启动随包 PrepareDependencies.ps1（Windows PowerShell，遵守执行策略）。明确确认后下载缺失组件：vgamepad 0.1.0 PyPI sdist，SHA256 57f6bd01aec0c172947517fb782d150ef9b285f7f4d524c317374fa5c24a89de，仅提取 x64 DLL，不运行 Python 包。ViGEmBus 1.22.0 官方安装包 SHA256 89220A7865076B342892F98865F3499FB7C4CFD673159E89D352C360FD014C6A（Microsoft winget manifest）；要求 Authenticode Valid，用户输入 Y 才启动交互式安装。已存在 SDK 不覆盖，已检测到服务不重装。临时目录仅删除本次创建的目录，已校验的驱动安装包保留于 dependencies。无网络、校验失败、策略限制或安装失败需反馈；不关闭防护、不修改签名设置。手动流程仍可用。
 来源：https://pypi.org/project/vgamepad/0.1.0/#files ; https://github.com/microsoft/winget-pkgs/blob/master/manifests/v/ViGEm/ViGEmBus/1.22.0/ViGEm.ViGEmBus.installer.yaml
+
+0.1.16：YES 前须关闭全部游戏。设备连接时也会检查并在必要时初始化非零轴、恢复全零；TEST 仍验证独立输出。

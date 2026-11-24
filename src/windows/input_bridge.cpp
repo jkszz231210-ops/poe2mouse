@@ -104,6 +104,7 @@ bool attach() {
     if(!config_ok) {message(L"E300：配置无效，请先检查配置。");return false;}
     if(!prepare_sdk(self)) return false;
     if(session->connected&&!session->closed) return true;
+    if(MessageBoxW(self,L"请确认全部游戏已关闭。连接时可能需要逐个发送一次微小摇杆测试值，再恢复全零；无按键或扳机输出。是否继续？",L"连接与初始化设备",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return false;
     device_verified=false;
     if(!session->start()||!create_identified(*session,0)||!create_identified(*session,1)) {
         detach();message(L"E205/E206：创建或识别设备失败。检查控制台。");return false;
@@ -112,8 +113,8 @@ bool attach() {
     if(!distinct_slots(*session,index)) {
         detach();message(L"E206：两个设备槽位无效或重复。请反馈控制台的 P1/P2 编号与 XInput 列表。");return false;
     }
-    if(!matches(index[0],{})||!matches(index[1],{})) {
-        detach();message(L"E207：设备中立状态回读失败。请反馈控制台 XInput 列表。");return false;
+    if(!initialize_pair(*session)) {
+        detach();message(L"E207：设备初始化或全零回读失败。已尝试释放设备，请反馈控制台。");return false;
     }
     sent={};assigned=index;diagnostics.record(Event::bridge_attached);
     std::cout<<"P1 XInput slot="<<index[0]<<" P2 XInput slot="<<index[1]<<"\n";
@@ -204,7 +205,7 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.15\n"
+    out<<"PoE2Mouse bridge 0.1.16\n"
         <<"device_verified: "<<device_verified<<"\n"
         <<"live_samples: "<<live_samples<<"\nlive_mismatches: "<<live_mismatches<<"\nlive_faults: "<<live_faults<<"\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
@@ -753,7 +754,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.15 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.16 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -767,7 +768,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.15 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.16 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

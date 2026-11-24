@@ -1,6 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/neutral_init.hpp"
 #include "poe2mouse/slot_identity.hpp"
 #include "poe2mouse/readback_monitor.hpp"
 #include "poe2mouse/bridge_labels.hpp"
@@ -208,5 +209,18 @@ int main() {
     check(!live.sample(false),"persistent mismatch fails");
     check(live.sample(true)&&live.consecutive()==0,"matching sample clears streak");
     live.sample(false);live.reset();check(live.consecutive()==0,"pause clears streak");
+    unsigned writes=0,reads=0;
+    PadReport last{};
+    check(initialize_neutral([&](PadReport r){++writes;last=r;return true;},
+        [&](PadReport r){++reads;return r==last;}),"prime and verify zero");
+    check(writes==2&&reads==2&&last==PadReport{},"prime restores exact zero");
+    writes=0;reads=0;
+    check(!initialize_neutral([&](PadReport r){++writes;last=r;return writes!=1;},
+        [&](PadReport r){++reads;return r==last;}),"prime failure does not pass");
+    check(writes==2&&reads==1&&last==PadReport{},"reset attempted after failed prime");
+    writes=0;reads=0;
+    check(!initialize_neutral([&](PadReport r){++writes;last=r;return true;},
+        [&](PadReport){++reads;return reads!=1;}),"prime mismatch does not pass");
+    check(writes==2&&reads==2&&last==PadReport{},"reset attempted after mismatch");
     std::cout << "All core checks passed\n";
 }

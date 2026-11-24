@@ -8,6 +8,7 @@
 #include <iostream>
 #include "poe2mouse/pad_output.hpp"
 #include "poe2mouse/slot_identity.hpp"
+#include "poe2mouse/neutral_init.hpp"
 namespace pm::win {
 using Error=std::uint32_t;
 constexpr Error success=0x20000000u;
@@ -157,6 +158,40 @@ inline bool matches(DWORD slot,const Report& expected) {
     }
     std::cout<<"XInput state mismatch at slot "<<slot<<"\n";
     slot_snapshot();return false;
+}
+inline bool initialize_pair(Session& s) {
+    std::array<ULONG,2> index{};
+    if(!distinct_slots(s,index)) return false;
+    // The bus can start with non-zero axes even after a successful zero report.
+    // Only run in explicit setup with games closed, not during gameplay.
+    for(std::size_t p=0;p<2;++p) {
+        Report current{};
+        if(!read_report(index[p],current)) {
+            std::cout<<"E207: cannot read initial P"<<p+1<<" state\n";
+            slot_snapshot();return false;
+        }
+        if(current==Report{}) {
+            std::cout<<"P"<<p+1<<" initial neutral: PASS\n";
+            continue;
+        }
+        if(current.buttons||current.lt||current.rt) {
+            std::cout<<"E207: unexpected initial buttons/triggers; refusing initialization\n";
+            slot_snapshot();return false;
+        }
+        std::cout<<"P"<<p+1<<" initial axis offset: "<<current.lx<<","<<current.ly<<","<<current.rx<<","<<current.ry<<"\n";
+        const bool ok=pm::initialize_neutral(
+            [&](const Report& r) {
+                const auto code=s.api.update(s.client,s.pads[p],r);
+                result(r==Report{}?"initialize restore neutral":"initialize nonzero axis",code);
+                return code==success;
+            },
+            [&](const Report& r) {return matches(index[p],r);});
+        std::cout<<"P"<<p+1<<" initialization: "<<(ok?"PASS":"FAIL")<<"\n";
+        if(!ok) return false;
+    }
+    const bool ok=matches(index[0],{})&&matches(index[1],{});
+    std::cout<<"Both devices exact neutral: "<<(ok?"PASS":"FAIL")<<"\n";
+    return ok;
 }
 inline bool readback(Session& s) {
     std::array<ULONG,2> index{};

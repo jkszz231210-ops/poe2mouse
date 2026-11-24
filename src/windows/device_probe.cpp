@@ -21,8 +21,8 @@ void slots(const char* stage) {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.15 | neutral virtual controller probe\n"
-        <<"Close games. This test creates two devices. Optional TEST sends diagnostic samples only.\n";
+    std::cout<<"PoE2Mouse 0.1.16 | neutral virtual controller probe\n"
+        <<"Close all games. This test creates two devices and may send a small initialization axis then restore zero. Optional TEST sends diagnostic samples only.\n";
     if(argc!=2) {
         std::cout<<"Usage: device_probe.exe <absolute path to trusted x64 ViGEmClient.dll>\n";return 2;
     }
@@ -38,13 +38,13 @@ int wmain(int argc,wchar_t** argv) {
     bool ok=false;
     {
         Session s(api);
-        if(s.start()&&create_identified(s,0)&&create_identified(s,1)) {
+        if(s.start()&&create_identified(s,0)&&create_identified(s,1)&&initialize_pair(s)) {
             Sleep(500); slots("after creation");
             std::cout<<"Open joy.cpl to inspect neutral devices. Close all games, type TEST for readback or press Enter to skip: ";
             std::string line; std::getline(std::cin,line);
             ok=line=="TEST"?readback(s):line.empty();
             if(line.empty()) std::cout<<"Readback skipped; not verified.\n";
-        } else std::cout<<"E205: driver connection or device creation failed; see hexadecimal results.\n";
+        } else std::cout<<"Device setup failed (E205/E206/E207); see detailed results.\n";
         const bool cleanup=s.close();
         if(!cleanup) std::cout<<"E209: device cleanup returned an error\n";
         ok=ok&&cleanup;
