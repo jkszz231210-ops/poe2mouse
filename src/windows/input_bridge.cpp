@@ -1,5 +1,9 @@
 // User-initiated independent device mapping, no automatic sequences or broadcast.
 #include "vigem_backend.hpp"
+#include "poe2mouse/physical_keys.hpp"
+#include "poe2mouse/diagnostics.hpp"
+#include <sstream>
+#include <algorithm>
 #include <commdlg.h>
 #include <fstream>
 #include <iterator>
@@ -8,6 +12,10 @@ namespace {
 using namespace pm;
 using namespace pm::win;
 Engine engine;
+PhysicalKeys physical_keys;
+Diagnostics diagnostics;
+std::array<ULONG,2> assigned{XUSER_MAX_COUNT,XUSER_MAX_COUNT};
+std::uint64_t output_updates=0,output_failures=0;
 PadMap padmap{};
 Session* session=nullptr;
 std::array<PadReport,2> sent{};
@@ -16,13 +24,14 @@ DWORD target_pid=0;
 HWINEVENTHOOK focus_hook=nullptr;
 bool armed=false,countdown=false,raw_registered=false,cleanup_failed=false;
 constexpr UINT_PTR monitor_timer=1,select_timer=2;
-enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id };
+enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id };
 void message(const wchar_t* s) { if(status) SetWindowTextW(status,s); }
 bool send(std::size_t p,PadReport r,bool force=false) {
     if(!session||!session->added[p]) return false;
     if(!force&&r==sent[p]) return true;
+    ++output_updates;
     const auto code=session->api.update(session->client,session->pads[p],r);
-    if(code!=success) { result("E303 update",code);return false; }
+    if(code!=success) { ++output_failures;diagnostics.record(Event::bridge_output_failed);result("E303 update",code);return false; }
     sent[p]=r;return true;
 }
 bool raw_registration(bool enable) {
@@ -31,14 +40,16 @@ bool raw_registration(bool enable) {
     devices[0]={1,6,flags,enable?self:nullptr};
     devices[1]={1,2,flags,enable?self:nullptr};
     if(!RegisterRawInputDevices(devices,2,sizeof(RAWINPUTDEVICE))) {
+        diagnostics.record(Event::bridge_raw_failed);
         std::cout<<"E301 Raw Input registration: "<<GetLastError()<<"\n";return false;
     }
     raw_registered=enable;return true;
 }
 void stop(const wchar_t* reason) {
+    if(armed) diagnostics.record(Event::bridge_paused);
     armed=false; countdown=false;target=nullptr;target_pid=0;
     if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);}
-    engine.reset();
+    engine.reset();physical_keys.reset();
     const bool unregistered=!raw_registered||raw_registration(false);
     bool ok=true;
     for(std::size_t i=0;i<2;++i) if(session&&session->added[i]) {
@@ -57,7 +68,8 @@ void detach() {
     if(session) {
         const bool ok=session->close();
         cleanup_failed=cleanup_failed||!ok;
-        sent={};
+        sent={};assigned={XUSER_MAX_COUNT,XUSER_MAX_COUNT};
+        diagnostics.record(ok?Event::bridge_detached:Event::bridge_cleanup_failed);
         message(ok&&!cleanup_failed?L"Devices detached. Native keyboard/mouse remains available.":L"E209: Cleanup failed; check joy.cpl before continuing.");
     }
 }
@@ -72,7 +84,7 @@ bool attach() {
         !matches(index[0],{})||!matches(index[1],{})) {
         detach();message(L"E206/E207: Device readback failed. Check console.");return false;
     }
-    sent={};
+    sent={};assigned=index;diagnostics.record(Event::bridge_attached);
     std::cout<<"P1 XInput slot="<<index[0]<<" P2 XInput slot="<<index[1]<<"\n";
     message(L"Two devices connected, paused. Arm explicitly to test.");
     return true;
@@ -83,8 +95,8 @@ bool valid_focus() {
     GetWindowThreadProcessId(target,&pid);
     return pid==target_pid;
 }
-void CALLBACK focus_changed(HWINEVENTHOOK,DWORD,HWND w,LONG,LONG,DWORD,DWORD) {
-    if(armed&&w!=target) stop(L"Paused: focus left target. Re-arm manually.");
+void CALLBACK focus_changed(HWINEVENTHOOK,DWORD,HWND,LONG,LONG,DWORD,DWORD) {
+    if(armed&&GetForegroundWindow()!=target) stop(L"Paused: focus left target. Re-arm manually.");
 }
 bool arm(HWND w) {
     stop(L"Paused.");
@@ -95,6 +107,7 @@ bool arm(HWND w) {
     for(int k=1;k<256;++k) if(GetAsyncKeyState(k)&0x8000) {message(L"Release all keys/buttons before arming.");return false;}
     if(!raw_registration(true)) return false;
     target=w;target_pid=pid;armed=true;
+    diagnostics.record(Event::bridge_armed);
     if(!SetTimer(self,monitor_timer,50,nullptr)) {
         stop(L"E302: Focus monitor unavailable.");return false;
     }
@@ -110,19 +123,34 @@ void input(unsigned k,bool down) {
         }
     }
 }
+void physical(std::uintptr_t device,std::uint32_t token,unsigned key,bool down) {
+    if(!armed) return;
+    const auto change=physical_keys.input(device,token,key,down);
+    if(change==PhysicalKeys::Change::overflow) {
+        diagnostics.record(Event::bridge_raw_failed);
+        stop(L"E305: Too many held inputs. Paused.");
+        return;
+    }
+    if(change==PhysicalKeys::Change::pressed||change==PhysicalKeys::Change::released)
+        input(key,change==PhysicalKeys::Change::pressed);
+}
 void raw(LPARAM l) {
     if(!armed) return;
     if(!valid_focus()) {stop(L"Paused: focus changed.");return;}
     RAWINPUT r{};UINT size=sizeof(r);
     const UINT n=GetRawInputData(reinterpret_cast<HRAWINPUT>(l),RID_INPUT,&r,&size,sizeof(RAWINPUTHEADER));
-    if(n==static_cast<UINT>(-1)||n<sizeof(RAWINPUTHEADER)) return;
+    if(n==static_cast<UINT>(-1)||n<sizeof(RAWINPUTHEADER)) {
+        diagnostics.record(Event::bridge_raw_failed);stop(L"E301: Raw Input read failed. Paused.");return;
+    }
+    const auto device=reinterpret_cast<std::uintptr_t>(r.header.hDevice);
     if(r.header.dwType==RIM_TYPEKEYBOARD) {
         const auto& k=r.data.keyboard;
         unsigned key=k.VKey;
         if(key==VK_LSHIFT||key==VK_RSHIFT) key=VK_SHIFT;
         if(key==VK_LCONTROL||key==VK_RCONTROL) key=VK_CONTROL;
         if(key==VK_LMENU||key==VK_RMENU) key=VK_MENU;
-        if(key!=255) input(key,(k.Flags&RI_KEY_BREAK)==0);
+        const auto token=(static_cast<std::uint32_t>(k.VKey)<<16)|(static_cast<std::uint32_t>(k.MakeCode)<<3)|static_cast<std::uint32_t>(k.Flags&(RI_KEY_E0|RI_KEY_E1));
+        if(key!=255) physical(device,token,key,(k.Flags&RI_KEY_BREAK)==0);
     } else if(r.header.dwType==RIM_TYPEMOUSE) {
         const auto flags=r.data.mouse.usButtonFlags;
         constexpr std::array<std::array<unsigned,3>,5> buttons{{
@@ -132,10 +160,33 @@ void raw(LPARAM l) {
             {RI_MOUSE_BUTTON_4_DOWN,RI_MOUSE_BUTTON_4_UP,VK_XBUTTON1},
             {RI_MOUSE_BUTTON_5_DOWN,RI_MOUSE_BUTTON_5_UP,VK_XBUTTON2}}};
         for(const auto& b:buttons) {
-            if(flags&b[0]) input(b[2],true);
-            if(flags&b[1]) input(b[2],false);
+            const auto token=0x80000000u|b[2];
+            if(flags&b[0]) physical(device,token,b[2],true);
+            if(flags&b[1]) physical(device,token,b[2],false);
         }
     }
+}
+void copy_diagnostics(HWND w) {
+    std::ostringstream out;
+    out<<"PoE2Mouse bridge 0.1.9\n"
+        <<"armed: "<<armed<<"\nconnected: "<<(session&&session->connected)<<"\n"
+        <<"p1_xinput_slot: "<<assigned[0]<<"\np2_xinput_slot: "<<assigned[1]<<"\n"
+        <<"slot 4 means detached/unknown\noutput_updates: "<<output_updates<<"\noutput_failures: "<<output_failures<<"\n"
+        <<"cleanup_failed: "<<cleanup_failed<<"\nraw_registered: "<<raw_registered<<"\n";
+    diagnostics.write(out);
+    const auto report=out.str();
+    const std::wstring wide(report.begin(),report.end());
+    const auto bytes=(wide.size()+1)*sizeof(wchar_t);
+    HGLOBAL mem=GlobalAlloc(GMEM_MOVEABLE,bytes);
+    if(!mem) {message(L"E306: Cannot allocate report.");return;}
+    auto* dest=static_cast<wchar_t*>(GlobalLock(mem));
+    if(!dest) {GlobalFree(mem);message(L"E306: Cannot lock report.");return;}
+    std::copy(wide.cbegin(),wide.cend(),dest);dest[wide.size()]=L'\0';GlobalUnlock(mem);
+    if(!OpenClipboard(w)) {GlobalFree(mem);message(L"E306: Clipboard unavailable.");return;}
+    const bool ok=EmptyClipboard()!=0&&SetClipboardData(CF_UNICODETEXT,mem)!=nullptr;
+    CloseClipboard();
+    if(!ok) GlobalFree(mem);
+    message(ok?L"Report copied. Paste into chat or GitHub issue.":L"E306: Copy failed.");
 }
 LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     switch(m) {
@@ -148,8 +199,9 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         CreateWindowW(L"BUTTON",L"Stop / release",WS_VISIBLE|WS_CHILD|BS_PUSHBUTTON,375,55,160,35,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(stop_id)),inst,nullptr);
         CreateWindowW(L"BUTTON",L"Connect devices",WS_VISIBLE|WS_CHILD|BS_PUSHBUTTON,15,105,160,35,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(attach_id)),inst,nullptr);
         CreateWindowW(L"BUTTON",L"Disconnect devices",WS_VISIBLE|WS_CHILD|BS_PUSHBUTTON,185,105,180,35,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(detach_id)),inst,nullptr);
+        CreateWindowW(L"BUTTON",L"Copy diagnostics",WS_VISIBLE|WS_CHILD|BS_PUSHBUTTON,375,105,160,35,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(report_id)),inst,nullptr);
         status=CreateWindowW(L"STATIC",L"Devices detached. Connect devices to test.",WS_VISIBLE|WS_CHILD,15,155,625,65,w,nullptr,inst,nullptr);
-        CreateWindowW(L"STATIC",L"Default: WASD / arrows, QERTF / Shift+QERTF, mouse buttons.\r\nChange bridge.profile and bridge.map, then restart.\r\nNo mouse aiming or game-specific skill mapping yet.\r\nSwitch to another window to disarm. Keyboard is not suppressed.",WS_VISIBLE|WS_CHILD,15,225,625,95,w,nullptr,inst,nullptr);
+        CreateWindowW(L"STATIC",L"Default: WASD / arrows, QERTF / Shift+QERTF, mouse buttons.\r\nChange bridge.profile and bridge.map, then restart.\r\nIJKL: optional manual right stick; native targeting when released.\r\nSwitch to another window to disarm. Keyboard is not suppressed.",WS_VISIBLE|WS_CHILD,15,225,625,95,w,nullptr,inst,nullptr);
         focus_hook=SetWinEventHook(EVENT_SYSTEM_FOREGROUND,EVENT_SYSTEM_FOREGROUND,nullptr,focus_changed,0,0,WINEVENT_OUTOFCONTEXT);
         if(!focus_hook) {std::cout<<"E302 focus hook: "<<GetLastError()<<"\n";return -1;}
         return 0;
@@ -158,6 +210,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         if(LOWORD(wp)==stop_id) stop(L"Paused by user.");
         else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"E205: Connect unsuccessful\n";}
         else if(LOWORD(wp)==detach_id) detach();
+        else if(LOWORD(wp)==report_id) {stop(L"Paused for report.");copy_diagnostics(w);}
         else if(LOWORD(wp)==self_id) {if(!arm(w)) std::cout<<"E302: Cannot arm this window; check connection, focus and released keys.\n";}
         else if(LOWORD(wp)==external_id) {
             stop(L"Paused.");
@@ -200,7 +253,7 @@ template<class T,class Reader> bool load(const std::filesystem::path& folder,con
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.8 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.9 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -211,7 +264,7 @@ int wmain(int argc,wchar_t** argv) {
        !independent_profile(p,padmap,error)) {
         std::cout<<"E300: "<<error<<"\n";return 2;
     }
-    engine.set_profile(p);
+    engine.set_profile(p);diagnostics.record(Event::startup_ok);
     wchar_t file[MAX_PATH]{};
     std::filesystem::path dll;
     if(argc==2) dll=argv[1];
@@ -230,7 +283,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.8 - independent input bridge",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,675,400,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.9 - independent input bridge",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,675,400,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

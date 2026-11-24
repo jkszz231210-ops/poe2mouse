@@ -26,3 +26,29 @@ p2 slot6 rt
 p2 slot7 lt
 p2 slot8 rb
 p2 dodge b
+
+# Complete manual controller control coverage; this is not a PoE2 skill layout.
+p1 aim_up rup
+p1 aim_down rdown
+p1 aim_left rleft
+p1 aim_right rright
+p1 nav_up dup
+p1 nav_down ddown
+p1 nav_left dleft
+p1 nav_right dright
+p1 menu start
+p1 view back
+p1 left_click lthumb
+p1 right_click rthumb
+p2 aim_up rup
+p2 aim_down rdown
+p2 aim_left rleft
+p2 aim_right rright
+p2 nav_up dup
+p2 nav_down ddown
+p2 nav_left dleft
+p2 nav_right dright
+p2 menu start
+p2 view back
+p2 left_click lthumb
+p2 right_click rthumb

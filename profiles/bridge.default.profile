@@ -26,3 +26,29 @@ schema 3
 2 p2 slot7 1
 4 p2 slot8 1
 32 p2 dodge 1
+
+# Optional manual right stick, D-pad and menu controls. Shift selects P2.
+73 p1 aim_up
+73 p2 aim_up 1
+75 p1 aim_down
+75 p2 aim_down 1
+74 p1 aim_left
+74 p2 aim_left 1
+76 p1 aim_right
+76 p2 aim_right 1
+104 p1 nav_up
+104 p2 nav_up 1
+98 p1 nav_down
+98 p2 nav_down 1
+100 p1 nav_left
+100 p2 nav_left 1
+102 p1 nav_right
+102 p2 nav_right 1
+13 p1 menu
+13 p2 menu 1
+8 p1 view
+8 p2 view 1
+103 p1 left_click
+103 p2 left_click 1
+105 p1 right_click
+105 p2 right_click 1

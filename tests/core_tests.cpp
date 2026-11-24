@@ -1,6 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/physical_keys.hpp"
 #include "poe2mouse/axis_curve.hpp"
 #include <limits>
 #include "poe2mouse/diagnostics.hpp"
@@ -157,5 +158,31 @@ int main() {
     e.reset();check(make_pad_report(e.state()[0],map[0])==PadReport{},"neutral on reset");
     std::istringstream duplicate_map("schema 1\np1 up lup\np1 up ldown\n");
     check(!read_pad_map(duplicate_map,map,error)&&map[0][0]==Control::lup,"transactional map rejection");
+    PhysicalKeys keys;
+    using Change=PhysicalKeys::Change;
+    check(keys.input(1,42,16,true)==Change::pressed,"first shift");
+    check(keys.input(1,42,16,true)==Change::ignored,"repeat physical shift");
+    check(keys.input(1,54,16,true)==Change::ignored,"second shift same logical key");
+    check(keys.input(1,42,16,false)==Change::ignored,"first shift release does not clear");
+    check(keys.input(1,54,16,false)==Change::released,"last shift release");
+    check(keys.input(1,87,87,true)==Change::pressed,"keyboard one");
+    check(keys.input(2,87,87,true)==Change::ignored,"keyboard two");
+    check(keys.input(1,87,87,false)==Change::ignored,"second keyboard retains logical key");
+    check(keys.input(2,87,87,false)==Change::released,"second keyboard release");
+    check(keys.input(2,87,87,false)==Change::ignored,"late release ignored");
+    for(std::size_t i=0;i<PhysicalKeys::capacity;++i)
+        check(keys.input(i,1,65,true)==(i==0?Change::pressed:Change::ignored),"bounded held state");
+    check(keys.input(999,1,65,true)==Change::overflow,"capacity fail closed");
+    keys.reset();
+    check(keys.input(999,1,65,true)==Change::pressed,"tracker reset");
+    PadMap full_map{};
+    std::istringstream extended_map("schema 1\np1 menu start\np1 aim_right rright\np2 view back\n");
+    check(read_pad_map(extended_map,full_map,error),"extended map parse");
+    Engine::State manual{};
+    manual[0][static_cast<unsigned>(Action::menu)]=1;
+    manual[0][static_cast<unsigned>(Action::aim_right)]=1;
+    auto extended=make_pad_report(manual[0],full_map[0]);
+    check(extended.buttons==0x10&&extended.rx==32767&&extended.ry==0,"manual menu and right stick");
+    check(make_pad_report(manual[1],full_map[1])==PadReport{},"second controller stays neutral");
     std::cout << "All core checks passed\n";
 }

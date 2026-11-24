@@ -9,12 +9,14 @@ namespace pm {
 enum class Event : unsigned {
     startup_ok, startup_profile_failed, profile_loaded, profile_invalid,
     profile_write_failed, profile_exported, profile_imported, focus_reset,
-    timer_failed, arena_reset, count
+    timer_failed, arena_reset, bridge_attached, bridge_detached, bridge_armed, bridge_paused,
+    bridge_raw_failed, bridge_output_failed, bridge_cleanup_failed, count
 };
 inline constexpr std::array<std::string_view,static_cast<std::size_t>(Event::count)> event_names{
     "startup_ok","startup_profile_failed","profile_loaded","profile_invalid",
     "profile_write_failed","profile_exported","profile_imported","focus_reset",
-    "timer_failed","arena_reset"
+    "timer_failed","arena_reset","bridge_attached","bridge_detached","bridge_armed","bridge_paused",
+    "bridge_raw_failed","bridge_output_failed","bridge_cleanup_failed"
 };
 // Bounded in-memory operational events only. No key codes, text, paths or input history.
 class Diagnostics {

@@ -1,4 +1,4 @@
-# Release acceptance and open questions / 0.1.8
+# Release acceptance and open questions / 0.1.9
 Do not claim a playable release until the four P0 gates are verified on the user's home Windows laptop. Record actual client version, region, input mode, observations and commit. Do not require cosmetic polish.
  
 ## P0 core
@@ -11,7 +11,7 @@ Do not claim a playable release until the four P0 gates are verified on the user
 - [ ] Pause keeps devices neutral; detach releases both devices without exiting application. Reconnect explicitly; game-side return to solo and rejoin workflow may require character screen or relog, must verify.
 - [ ] Normal exit, forced Task Manager termination, OS sleep, input unplug, driver loss, game disconnect, crash and restart. Confirm no stuck input or extra virtual devices; never auto resume. Game may pause or disconnect when controller disappears depending on settings/version. Restore original single-player input via game UI.
 - [ ] Market / trade: before transaction disable output; test market browse/search, buy/sell, stash/inventory, chat, town, external browser, P2 permissions and native input mode. Do not automate purchases or chat. No assertion of unaffected trade or safe account status before testing. 
-- [ ] Report bug through chat or issue with version/commit, error code, expected/actual, reproduction and device slots. Bridge console currently available; integrate bounded opt-in report and crash-safe operational logs later. No raw keystroke history or automatic upload.
+- [ ] Report bug through chat or issue with version/commit, error code, expected/actual, reproduction and device slots. Bridge console and opt-in bounded clipboard report available in code; crash-safe operational logs remain pending. No raw keystroke history or automatic upload.
 - [ ] Config persistence / migration / rollback, mouse macro buttons only as manual inputs, direct key capture, profiles, mode keys, conflicts.
 - [ ] Performance: home Ryzen 7 7735H / RTX 4050 Laptop / 16 GB, repeat same scene/settings with and without software, measure CPU, working set, FPS and 1% low, input latency P99 and 72h stability. Goals idle <=0.1% CPU, active <=0.5%, <=30 MB working set, software P99 <=1 ms, avg FPS loss <=1%, 1% low loss <=2%; targets not measurements. Paused bridge should unsubscribe Raw Input, no periodic monitor, no disk log/network/GPU drawing loop. Verify.
 - [ ] Single instance and emergency shortcut configurable; error recovery, driver uninstall instructions, no stale files.
@@ -21,3 +21,5 @@ Do not claim a playable release until the four P0 gates are verified on the user
 - Per-skill targeting mode introduced in 0.2.0: https://poe2db.tw/us/Version_0.2.0
 - Historical controller disconnect pause behavior: https://poe2db.tw/sp/markdown_diff?diff=1428&oldid=0
 - Client-specific market and single-player transition are unknown until tested.
+
+Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual device/game behavior.

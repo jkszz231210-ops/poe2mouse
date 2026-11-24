@@ -16,3 +16,5 @@
 - Model native game action slots separately from physical bindings. Do not invent extra game slots or assume keyboard and controller layouts are identical. Preserve the ability to bind independent role actions and user-selectable modifiers. Confirm actual slot mappings per game version and input mode.
 
 - Acceptance gates and deferred operational details live in docs/ACCEPTANCE.md. Prefer native controller auto-targeting and per-skill target modes over recreating mouse aim; no automated target selection. Pause and detach are distinct. No gameplay release claims before the P0 gates are verified.
+
+- Record newly discovered defects and their fix/test evidence in docs/ISSUE_LOG.md or GitHub Issues; distinguish static review, CI and runtime observations.

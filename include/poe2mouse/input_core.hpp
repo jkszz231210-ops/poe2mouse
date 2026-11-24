@@ -11,13 +11,15 @@ namespace pm {
 enum class Action : unsigned {
     up, down, left, right, attack, skill, dodge, solo_p1, solo_p2,
     slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8, slot9, slot10, slot11, slot12, slot13,
-    flask1, flask2, weapon_swap, interact, count
+    flask1, flask2, weapon_swap, interact,
+    aim_up, aim_down, aim_left, aim_right, nav_up, nav_down, nav_left, nav_right, menu, view, left_click, right_click, count
 };
 inline constexpr std::size_t action_count=static_cast<std::size_t>(Action::count);
 inline constexpr std::array<std::string_view,action_count> names{
     "up","down","left","right","attack","skill","dodge","solo_p1","solo_p2",
     "slot1","slot2","slot3","slot4","slot5","slot6","slot7","slot8","slot9","slot10","slot11","slot12","slot13",
-    "flask1","flask2","weapon_swap","interact"};
+    "flask1","flask2","weapon_swap","interact",
+    "aim_up","aim_down","aim_left","aim_right","nav_up","nav_down","nav_left","nav_right","menu","view","left_click","right_click"};
 enum class Target : unsigned { none=0,p1=1,p2=2,both=3 };
 struct Binding { Target target{Target::none}; Action action{Action::up}; };
 inline constexpr std::size_t key_count=256, layer_count=8;
