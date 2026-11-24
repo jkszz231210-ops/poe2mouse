@@ -45,10 +45,12 @@ inline void result(const char* operation,Error code) {
 }
 struct Session {
     Api& api; void* client{}; bool connected{};
-    bool closed=false;
+    bool closed=false,last_cleanup_ok=true;
     std::array<void*,2> pads{}; std::array<bool,2> added{};
     explicit Session(Api& a):api(a){}
     bool start() {
+        if(client||connected) return false;
+        closed=false;
         client=api.alloc();
         if(!client) {std::cout<<"E203 allocation failed\n";return false;}
         auto err=api.connect(client); result("connect",err);
@@ -64,7 +66,7 @@ struct Session {
         return err==success;
     }
     bool close() {
-        if(closed) return true;
+        if(closed) return last_cleanup_ok;
         closed=true; bool ok=true;
         for(std::size_t i=pads.size();i>0;--i) {
             const auto k=i-1;
@@ -77,6 +79,7 @@ struct Session {
         }
         if(connected) api.disconnect(client);
         if(client) api.free_client(client);
+        client=nullptr;connected=false;pads={};added={};last_cleanup_ok=ok;
         return ok;
     }
     ~Session() { if(!closed) close(); }

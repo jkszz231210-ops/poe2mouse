@@ -78,7 +78,7 @@ inline PadReport make_pad_report(const Engine::State::value_type& state,const Pa
     PadReport r{};
     stick(axis(Control::lright,Control::lleft),axis(Control::lup,Control::ldown),r.lx,r.ly);
     stick(axis(Control::rright,Control::rleft),axis(Control::rup,Control::rdown),r.rx,r.ry);
-    constexpr std::array<std::pair<Control,std::uint16_t>,14> buttons{{
+    constexpr std::array<std::pair<Control,unsigned>,14> buttons{{
         {Control::dup,0x0001},{Control::ddown,0x0002},{Control::dleft,0x0004},{Control::dright,0x0008},
         {Control::start,0x0010},{Control::back,0x0020},{Control::lthumb,0x0040},{Control::rthumb,0x0080},
         {Control::lb,0x0100},{Control::rb,0x0200},{Control::a,0x1000},{Control::b,0x2000},

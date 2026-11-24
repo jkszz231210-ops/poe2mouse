@@ -1,4 +1,4 @@
-# Capability status (0.1.7)
+# Capability status (0.1.8)
 | Capability | Status |
 |---|---|
 | C++20 core, local P1/P2 shared and independent action state | implemented |
@@ -6,7 +6,7 @@
 | Windows foreground keyboard/mouse diagnostic | implemented |
 | Local movement simulation, wall and speed divergence | implemented |
 | Profile import/export, reload and persistence | implemented; interactive Windows test pending |
-| Portable Windows package workflow | 0.1.6 Windows/Linux CI passed; 0.1.7 CI pending |
+| Portable Windows package workflow | 0.1.7 Linux passed / Windows C4244 failed; 0.1.8 fix submitted, CI pending |
 | Bounded diagnostics, explicit clipboard/file export, Chinese feedback guide | implemented; CI and Windows interactive validation pending |
 | Schema 1/2 compatibility, movement-only solo modifiers, upgrade-safe defaults | implemented; latest CI pending |
 | Read-only Raw Input enumeration and XInput slot snapshot | implemented; Windows manual verification pending |
@@ -16,6 +16,7 @@
 | Pure radial curve calibration | implemented; CI pending; no game integration |
 | Graphical key capture, wheel binding, actual game slot mapping | planned |
 | Independent Raw Input to virtual controller report bridge | implemented; CI and physical device test pending |
+| Explicit attach/detach without exit, pause unsubscribes input | implemented; Windows runtime pending |
 | Raw Input device identity, mouse aiming, native keyboard conflict | pending |
 | Game-facing adapter, PoE2 native key import and hot switching | not implemented or verified |
 | Later game version compatibility | architecture goal |
@@ -29,4 +30,6 @@ Previous v0.1.2 commit 77876df passed Windows/Linux CI: https://github.com/jkszz
 
 Prior 0.1.5 commit fdc3012 passed both CI platforms: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330149185 .
 
-0.1.6 CI passed: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330941590 . 0.1.7 adds an explicitly armed independent remapper; no broadcast output.
+0.1.6 CI passed: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45330941590 . 0.1.8 adds an explicitly armed independent remapper; no broadcast output.
+
+Acceptance gates: docs/ACCEPTANCE.md. Native auto-target first; no precise mouse aiming requirement unless gameplay tests show a need.

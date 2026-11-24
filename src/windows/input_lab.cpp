@@ -44,7 +44,7 @@ void text(HDC dc,int x,int y,const wchar_t* t) { TextOutW(dc,x,y,t,lstrlenW(t));
 void draw(HDC dc,RECT area) {
     FillRect(dc,&area,reinterpret_cast<HBRUSH>(COLOR_WINDOW+1));
     SetBkMode(dc,TRANSPARENT);
-    text(dc,20,15,L"PoE2Mouse 0.1.7 | Offline two-character input lab");
+    text(dc,20,15,L"PoE2Mouse 0.1.8 | Offline two-character input lab");
     text(dc,20,39,L"WASD: both  |  Shift/Ctrl: P1/P2 movement  |  L/R mouse: separate attacks");
     RECT field{20,70,480,260}; FrameRect(dc,&field,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
     RECT wall{225,112,275,218}; FillRect(dc,&wall,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
@@ -132,7 +132,7 @@ std::string make_report() {
     SYSTEM_INFO sys{}; GetNativeSystemInfo(&sys);
     MEMORYSTATUSEX memory{}; memory.dwLength=sizeof(memory);
     out << "PoE2Mouse diagnostic report\n"
-        << "app_version: 0.1.7\nprofile_schema_supported: 1,2,3\ngame_adapter: none (offline lab)\n"
+        << "app_version: 0.1.8\nprofile_schema_supported: 1,2,3\ngame_adapter: none (offline lab)\n"
         << "logical_processors: " << sys.dwNumberOfProcessors << '\n';
     if(GlobalMemoryStatusEx(&memory))
         out << "physical_memory_mib: " << memory.ullTotalPhys/1048576ULL << '\n';
@@ -364,7 +364,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     AppendMenuW(help,MF_STRING,copy_id,L"Copy diagnostic report");
     AppendMenuW(help,MF_STRING,report_id,L"Save diagnostics.txt");
     AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(help),L"Help");
-    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.7",
+    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.8",
         WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,760,680,nullptr,menu,instance,nullptr);
     if(!w) { DestroyMenu(menu); return 1; }
     ShowWindow(w,show);
