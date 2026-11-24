@@ -27,15 +27,15 @@ schema 3
 4 p2 slot8 1
 32 p2 dodge 1
 
-# Optional manual right stick, D-pad and menu controls. Shift selects P2.
-73 p1 aim_up
-73 p2 aim_up 1
-75 p1 aim_down
-75 p2 aim_down 1
-74 p1 aim_left
-74 p2 aim_left 1
-76 p1 aim_right
-76 p2 aim_right 1
+# Optional manual right stick F5-F8 (no default I collision), D-pad and menu controls. Shift selects P2.
+116 p1 aim_up
+116 p2 aim_up 1
+117 p1 aim_down
+117 p2 aim_down 1
+118 p1 aim_left
+118 p2 aim_left 1
+119 p1 aim_right
+119 p2 aim_right 1
 104 p1 nav_up
 104 p2 nav_up 1
 98 p1 nav_down

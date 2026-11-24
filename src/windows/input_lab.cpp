@@ -1,3 +1,4 @@
+#include "poe2mouse/bridge_labels.hpp"
 #include <windows.h>
 #include <commdlg.h>
 #include <Xinput.h>
@@ -44,8 +45,8 @@ void text(HDC dc,int x,int y,const wchar_t* t) { TextOutW(dc,x,y,t,lstrlenW(t));
 void draw(HDC dc,RECT area) {
     FillRect(dc,&area,reinterpret_cast<HBRUSH>(COLOR_WINDOW+1));
     SetBkMode(dc,TRANSPARENT);
-    text(dc,20,15,L"PoE2Mouse 0.1.10 | Offline two-character input lab");
-    text(dc,20,39,L"WASD: both  |  Shift/Ctrl: P1/P2 movement  |  L/R mouse: separate attacks");
+    text(dc,20,15,L"PoE2Mouse 0.1.11 | 独立沙盒（不使用主程序配置）");
+    text(dc,20,39,L"沙盒专用：WASD 双角色；Shift/Ctrl 单独移动；真实配置请用主程序离线预览");
     RECT field{20,70,480,260}; FrameRect(dc,&field,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
     RECT wall{225,112,275,218}; FillRect(dc,&wall,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
     for(unsigned p=0;p<2;++p) {
@@ -65,16 +66,16 @@ void draw(HDC dc,RECT area) {
         }
         text(dc,x+10,y-12,p==0?L"P1":L"P2");
         const int col=20+static_cast<int>(p)*335;
-        text(dc,col,278,p==0?L"PLAYER 1":L"PLAYER 2");
+        text(dc,col,278,p==0?L"角色 1":L"角色 2");
         for(unsigned i=0;i<pm::action_count;++i) {
-            std::wstring label(pm::names[i].begin(),pm::names[i].end());
-            label+=a[i]?L"  [ACTIVE]":L"  [idle]";
+            std::wstring label(pm::action_zh[i]);
+            label+=a[i]?L" [按下]":L" [空闲]";
             SetTextColor(dc,a[i]?RGB(0,110,70):RGB(90,90,90));
             text(dc,col+static_cast<int>(i/19)*155,305+static_cast<int>(i%19)*19,label.c_str());
         }
         SetTextColor(dc,RGB(0,0,0));
     }
-    text(dc,20,680,L"Profile: import/export/reload. Help: usage and diagnostics. Offline lab only.");
+    text(dc,20,680,L"仅离线沙盒；主程序的中文键位及实时预览请打开 input_bridge.exe。");
 }
 bool load(const std::filesystem::path& path,pm::Profile& result) {
     std::ifstream in(path); std::string error;
@@ -132,7 +133,7 @@ std::string make_report() {
     SYSTEM_INFO sys{}; GetNativeSystemInfo(&sys);
     MEMORYSTATUSEX memory{}; memory.dwLength=sizeof(memory);
     out << "PoE2Mouse diagnostic report\n"
-        << "app_version: 0.1.10\nprofile_schema_supported: 1,2,3\ngame_adapter: none (offline lab)\n"
+        << "app_version: 0.1.11\nprofile_schema_supported: 1,2,3\ngame_adapter: none (offline lab)\n"
         << "logical_processors: " << sys.dwNumberOfProcessors << '\n';
     if(GlobalMemoryStatusEx(&memory))
         out << "physical_memory_mib: " << memory.ullTotalPhys/1048576ULL << '\n';
@@ -353,18 +354,18 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     if(!RegisterClassW(&wc)) return 1;
     HMENU menu=CreateMenu(),sub=CreatePopupMenu(),help=CreatePopupMenu();
     if(!menu || !sub || !help) { if(menu) DestroyMenu(menu); if(sub) DestroyMenu(sub); if(help) DestroyMenu(help); return 1; }
-    AppendMenuW(sub,MF_STRING,editor_id,L"Edit bindings...");
-    AppendMenuW(sub,MF_STRING,import_id,L"Import profile...");
-    AppendMenuW(sub,MF_STRING,export_id,L"Export profile...");
-    AppendMenuW(sub,MF_STRING,reload_id,L"Reload profile");
-    AppendMenuW(sub,MF_STRING,reset_id,L"Reset arena");
-    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(sub),L"Profile");
-    AppendMenuW(help,MF_STRING,help_id,L"How to use / report a problem");
-    AppendMenuW(help,MF_STRING,devices_id,L"Check input devices");
-    AppendMenuW(help,MF_STRING,copy_id,L"Copy diagnostic report");
-    AppendMenuW(help,MF_STRING,report_id,L"Save diagnostics.txt");
-    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(help),L"Help");
-    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.10",
+    AppendMenuW(sub,MF_STRING,editor_id,L"编辑沙盒键位");
+    AppendMenuW(sub,MF_STRING,import_id,L"导入沙盒配置");
+    AppendMenuW(sub,MF_STRING,export_id,L"导出沙盒配置");
+    AppendMenuW(sub,MF_STRING,reload_id,L"重新读取");
+    AppendMenuW(sub,MF_STRING,reset_id,L"重置场景");
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(sub),L"沙盒配置");
+    AppendMenuW(help,MF_STRING,help_id,L"用法与反馈");
+    AppendMenuW(help,MF_STRING,devices_id,L"检查输入设备");
+    AppendMenuW(help,MF_STRING,copy_id,L"复制诊断报告");
+    AppendMenuW(help,MF_STRING,report_id,L"保存诊断报告");
+    AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(help),L"帮助");
+    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.11",
         WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,760,785,nullptr,menu,instance,nullptr);
     if(!w) { DestroyMenu(menu); return 1; }
     ShowWindow(w,show);

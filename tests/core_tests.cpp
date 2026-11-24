@@ -1,6 +1,7 @@
 #include "poe2mouse/input_core.hpp"
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
+#include "poe2mouse/bridge_labels.hpp"
 #include "poe2mouse/physical_keys.hpp"
 #include "poe2mouse/axis_curve.hpp"
 #include <limits>
@@ -184,5 +185,18 @@ int main() {
     auto extended=make_pad_report(manual[0],full_map[0]);
     check(extended.buttons==0x10&&extended.rx==32767&&extended.ry==0,"manual menu and right stick");
     check(make_pad_report(manual[1],full_map[1])==PadReport{},"second controller stays neutral");
+    BridgeOptions opts{};
+    std::istringstream options_input("schema 1\nnative_pause 121\n");
+    check(read_bridge_options(options_input,opts,error)&&opts.pause_key==121,"native pause options");
+    check(bridge_options_ok(independent,opts,error),"default pause no conflict");
+    Profile edited=independent;
+    check(rebind(edited,map,opts,87,0,90,0,{Target::p1,Action::up},error),"change physical key");
+    check(edited[87].target==Target::none&&edited[90].action==Action::up,"old key cleared");
+    check(!rebind(edited,map,opts,90,0,121,0,{Target::p1,Action::up},error),"reserved pause rejected");
+    check(!rebind(edited,map,opts,90,0,81,0,{Target::p1,Action::up},error),"duplicate key rejected");
+    check(edited[90].target==Target::p1,"failed edit retains state");
+    e.set_profile(edited);e.input(90,true);
+    check(make_pad_report(e.state()[0],map[0]).ly==32767,"new binding active");
+    e.reset();check(make_pad_report(e.state()[0],map[0])==PadReport{},"pause neutral");
     std::cout << "All core checks passed\n";
 }

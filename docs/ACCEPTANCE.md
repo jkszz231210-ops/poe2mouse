@@ -1,4 +1,4 @@
-# Release acceptance and open questions / 0.1.10
+# Release acceptance and open questions / 0.1.11
 Do not claim a playable release until the four P0 gates are verified on the user's home Windows laptop. Record actual client version, region, input mode, observations and commit. Do not require cosmetic polish.
  
 ## P0 core
@@ -26,3 +26,5 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 
 ## First-use gate
 - [ ] Launch without DLL/driver, view Chinese tutorial and dependency instructions, inspect real binding list, recover invalid configuration, copy report. Verify no device creation before explicit connect and no accidental output. No visual polish required.
+
+- [ ] Office test: no game/driver; actionable guide, same-profile preview, Chinese edit/save/reject conflict, reserved native pause. Game UI compatibility matrix: NATIVE_UI.md.
