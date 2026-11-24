@@ -37,7 +37,7 @@ DWORD target_pid=0;
 HWINEVENTHOOK focus_hook=nullptr;
 bool armed=false,countdown=false,raw_registered=false,cleanup_failed=false;
 constexpr UINT_PTR monitor_timer=1,select_timer=2;
-enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id,check_id,help_id,keys_id,driver_id,config_id,guide_id,preview_id,native_id };
+enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id,check_id,help_id,keys_id,driver_id,config_id,guide_id,preview_id,native_id,readback_id };
 enum : UINT { edit_list_id=200,edit_role_id,edit_apply_id,edit_new_id,edit_remove_id };
 void message(const wchar_t* s) { if(status) SetWindowTextW(status,s); }
 bool prepare_sdk(HWND w);
@@ -159,7 +159,7 @@ void physical(std::uintptr_t device,std::uint32_t token,unsigned key,bool down) 
         input(key,change==PhysicalKeys::Change::pressed);
 }
 void raw(LPARAM l) {
-    if(!armed) return;
+    if(!armed&&!preview) return;
     if(!valid_focus()) {stop(L"已暂停：窗口焦点改变。");return;}
     RAWINPUT r{};UINT size=sizeof(r);
     const UINT n=GetRawInputData(reinterpret_cast<HRAWINPUT>(l),RID_INPUT,&r,&size,sizeof(RAWINPUTHEADER));
@@ -313,7 +313,7 @@ bool start_preview(HWND w) {
     stop(L"已暂停。");
     if(!config_ok||GetForegroundWindow()!=w) {message(L"请先修复配置并返回主窗口。");return false;}
     if(!raw_registration(true,true)) {message(L"E301：离线预览输入注册失败。");return false;}
-    target=w;GetWindowThreadProcessId(w,&target_pid);preview=true;
+    target=w;GetWindowThreadProcessId(w,&target_pid);preview=true;SetFocus(w);
     if(!SetTimer(w,monitor_timer,50,nullptr)) {stop(L"E302：预览计时器失败。");return false;}
     refresh_preview();message(L"请试按 W、方向键、Q、Shift+Q，并观察 P1/P2；松开后应归零。");
     return true;
@@ -508,10 +508,18 @@ bool check_dependencies(HWND w) {
 }
 
 
+bool device_self_check(HWND w) {
+    stop(L"已暂停，准备设备自检。");
+    if(!session||!session->connected||session->closed) {message(L"请先连接两个设备。");return false;}
+    if(MessageBoxW(w,L"请确认已关闭全部游戏。自检会逐个设备输出固定测试轴值，并验证另一设备保持中立。是否开始？",L"设备输出自检",MB_OKCANCEL|MB_ICONQUESTION)!=IDOK) return false;
+    const bool ok=readback(*session);
+    stop(ok?L"设备自检通过：两个设备输出、隔离和归零通过。":L"E208：设备自检失败，请复制诊断和控制台结果。");
+    return ok;
+}
 void next_guide(HWND w) {
-    if(guide_stage<0||guide_stage>=4) {
+    if(guide_stage<0||guide_stage>=5) {
         guide_stage=0;
-        SetWindowTextW(guide_label,L"第1/4步：无需游戏或驱动。下一步开启离线预览，按 W、方向键、Q、Shift+Q。");
+        SetWindowTextW(guide_label,L"第1/4步：无需游戏或驱动。下一步开启离线预览。默认键位 W、方向键、Q、Shift+Q。");
         return;
     }
     if(guide_stage==0) {
@@ -529,7 +537,11 @@ void next_guide(HWND w) {
     } else if(guide_stage==3) {
         if(!attach()) return;
         guide_stage=4;
-        SetWindowTextW(guide_label,L"第4/4步：设备连接通过。请用 joy.cpl 逐个观察实际设备；选择测试窗口后验证释放。游戏兼容性仍未验证。");
+        SetWindowTextW(guide_label,L"第4/4步：设备连接通过。下一步运行设备输出自检（请先关闭游戏）。");
+    } else if(guide_stage==4) {
+        if(!device_self_check(w)) return;
+        guide_stage=5;
+        SetWindowTextW(guide_label,L"引导完成：设备底层自检通过。游戏兼容性仍待验证；可继续人工测试并反馈。");
     }
 }
 
@@ -563,6 +575,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         button(L"原生键鼠模式（暂停）",415,206,native_id);
         button(L"完整教程",15,249,help_id);
         button(L"真实设备本窗测试",215,249,self_id);
+        button(L"设备输出自检",415,249,readback_id);
         guide_label=label(L"引导：点击新手引导开始；可以随时使用离线预览。",15,294,610,55);
         preview_label=label(L"离线预览：未启用。",15,354,610,90);
         status=label(config_ok?L"状态：尚未连接。请从新手教程开始。":L"E300：配置无效；仍可查看帮助和反馈。",15,451,610,58);
@@ -576,6 +589,7 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     case WM_COMMAND:
         if(LOWORD(wp)==guide_id) next_guide(w);
         else if(LOWORD(wp)==preview_id) start_preview(w);
+        else if(LOWORD(wp)==readback_id) device_self_check(w);
         else if(LOWORD(wp)==native_id) stop(L"原生键鼠模式：虚拟输出已暂停。游戏必须自行支持当前输入模式。");
         else if(LOWORD(wp)==help_id) help(w);
         else if(LOWORD(wp)==keys_id) show_keys(w);
