@@ -28,3 +28,5 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 - [ ] Launch without DLL/driver, view Chinese tutorial and dependency instructions, inspect real binding list, recover invalid configuration, copy report. Verify no device creation before explicit connect and no accidental output. No visual polish required.
 
 - [ ] Office test: no game/driver; actionable guide, same-profile preview, Chinese edit/save/reject conflict, reserved native pause. Game UI compatibility matrix: NATIVE_UI.md.
+
+- [ ] After explicit device self-check, main-window real input test: hold P1 movement, P2 movement, independent button/chord, release, F10 pause, re-arm; observe actual XInput, not simulated state. Persistent mismatches pause and invalidate self-check. Short taps require separate timing tests.

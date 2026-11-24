@@ -2,6 +2,7 @@
 #include "poe2mouse/arena.hpp"
 #include "poe2mouse/pad_output.hpp"
 #include "poe2mouse/slot_identity.hpp"
+#include "poe2mouse/readback_monitor.hpp"
 #include "poe2mouse/bridge_labels.hpp"
 #include "poe2mouse/physical_keys.hpp"
 #include "poe2mouse/axis_curve.hpp"
@@ -202,5 +203,10 @@ int main() {
     check(new_slot(0,1)==0&&new_slot(1,3)==1,"sequential slot discovery");
     check(new_slot(2,10)==3&&new_slot(4,5)==0,"existing physical device slots");
     check(new_slot(0,3)==-1&&new_slot(1,2)==-1&&new_slot(1,1)==-1&&new_slot(16,17)==-1,"ambiguous or invalid discovery rejected");
+    ReadbackMonitor live;
+    check(live.sample(false)&&live.sample(false)&&live.sample(false),"tolerate transient sample lag");
+    check(!live.sample(false),"persistent mismatch fails");
+    check(live.sample(true)&&live.consecutive()==0,"matching sample clears streak");
+    live.sample(false);live.reset();check(live.consecutive()==0,"pause clears streak");
     std::cout << "All core checks passed\n";
 }

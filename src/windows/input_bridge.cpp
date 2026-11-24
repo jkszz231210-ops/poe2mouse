@@ -3,6 +3,7 @@
 #include "poe2mouse/physical_keys.hpp"
 #include "poe2mouse/diagnostics.hpp"
 #include "poe2mouse/bridge_labels.hpp"
+#include "poe2mouse/readback_monitor.hpp"
 #include <sstream>
 #include <algorithm>
 #include <commdlg.h>
@@ -28,7 +29,9 @@ HWND details=nullptr;
 PhysicalKeys physical_keys;
 Diagnostics diagnostics;
 std::array<ULONG,2> assigned{XUSER_MAX_COUNT,XUSER_MAX_COUNT};
-std::uint64_t output_updates=0,output_failures=0;
+std::uint64_t output_updates=0,output_failures=0,live_samples=0,live_mismatches=0,live_faults=0;
+ReadbackMonitor live_monitor;
+std::array<bool,2> live_activity{};
 PadMap padmap{};
 Session* session=nullptr;
 std::array<PadReport,2> sent{};
@@ -44,6 +47,7 @@ bool prepare_sdk(HWND w);
 bool load_configuration();
 void show_details(HWND owner,const wchar_t* title,const std::wstring& content);
 void refresh_preview();
+void live_readback();
 void refresh_bindings();
 void next_guide(HWND w);
 bool send(std::size_t p,PadReport r,bool force=false) {
@@ -67,7 +71,7 @@ bool raw_registration(bool enable,bool local=false) {
 }
 void stop(const wchar_t* reason) {
     if(armed) diagnostics.record(Event::bridge_paused);
-    armed=false;preview=false; countdown=false;target=nullptr;target_pid=0;
+    armed=false;preview=false; countdown=false;target=nullptr;target_pid=0;live_monitor.reset();
     if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);}
     engine.reset();physical_keys.reset();refresh_preview();
     const bool unregistered=!raw_registered||raw_registration(false);
@@ -133,12 +137,14 @@ bool arm(HWND w) {
     // A held key at arm time must be released before the next session.
     for(int k=1;k<256;++k) if(GetAsyncKeyState(k)&0x8000) {message(L"请松开全部按键和鼠标按钮后重试。");return false;}
     if(!raw_registration(true)) return false;
-    target=w;target_pid=pid;armed=true;
+    target=w;target_pid=pid;armed=true;live_monitor.reset();live_activity={};
+    if(w==self) SetFocus(self);
     diagnostics.record(Event::bridge_armed);
     if(!SetTimer(self,monitor_timer,50,nullptr)) {
         stop(L"E302：无法启动焦点监控。");return false;
     }
-    message(w==self?L"已启用本窗口测试。切换窗口会自动暂停。":L"已启用指定窗口。返回本软件即暂停。");
+    message(w==self?L"真实设备测试：按住 W、方向键、Q、Shift+Q，观察实际回读。F10 或切出窗口暂停。":L"已启用指定窗口。返回本软件即暂停。");
+    if(w==self) live_readback();
     return true;
 }
 void input(unsigned k,bool down) {
@@ -197,8 +203,9 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.13\n"
+    out<<"PoE2Mouse bridge 0.1.14\n"
         <<"device_verified: "<<device_verified<<"\n"
+        <<"live_samples: "<<live_samples<<"\nlive_mismatches: "<<live_mismatches<<"\nlive_faults: "<<live_faults<<"\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
         <<"config_ok: "<<config_ok<<"\nsdk_ready: "<<sdk_ready<<"\n"
         <<"armed: "<<armed<<"\nconnected: "<<(session&&session->connected)<<"\n"
@@ -316,6 +323,56 @@ void refresh_preview() {
     }
     SetWindowTextW(preview_label,out.str().c_str());
 }
+
+void live_readback() {
+    // Only the user-selected main-window test reads live XInput state.
+    // No sampling or text updates in external-window gameplay or idle mode.
+    if(!armed||target!=self||!valid_focus()||!preview_label) return;
+    std::array<PadReport,2> observed{};
+    std::array<bool,2> ok{};
+    bool equal=true;
+    for(std::size_t p=0;p<2;++p) {
+        ok[p]=read_report(assigned[p],observed[p]);
+        const bool match=ok[p]&&observed[p]==sent[p];
+        equal=equal&&match;
+        if(match&&observed[p]!=PadReport{}) live_activity[p]=true;
+    }
+    ++live_samples;
+    if(!equal) ++live_mismatches;
+    if(!live_monitor.sample(equal)) {
+        ++live_faults;
+        std::cout<<"E309: persistent live XInput readback mismatch\n";slot_snapshot();
+        device_verified=false;
+        stop(L"E309：真实设备状态持续不一致，已暂停。请重新自检并反馈。");
+        return;
+    }
+    std::wostringstream out;
+    out<<L"真实 XInput 回读（非离线模拟） | "<<(equal?L"当前一致":L"等待设备更新")<<L"\r\n";
+    for(std::size_t p=0;p<2;++p) {
+        const auto& r=observed[p];
+        out<<L"P"<<p+1<<L" 槽"<<assigned[p]<<L"：";
+        if(!ok[p]) out<<L"设备不可读";
+        else {
+            out<<L"左摇杆("<<r.lx<<L","<<r.ly<<L") 右摇杆("<<r.rx<<L","<<r.ry<<L") ";
+            if(r.lt) out<<L"LT ";
+            if(r.rt) out<<L"RT ";
+            constexpr std::array<std::pair<unsigned,std::wstring_view>,14> labels{{
+                {0x0001,L"十字↑"},{0x0002,L"十字↓"},{0x0004,L"十字←"},{0x0008,L"十字→"},
+                {0x0010,L"Start"},{0x0020,L"Back"},{0x0040,L"L3"},{0x0080,L"R3"},
+                {0x0100,L"LB"},{0x0200,L"RB"},{0x1000,L"A"},{0x2000,L"B"},{0x4000,L"X"},{0x8000,L"Y"}}};
+            for(const auto& [mask,label]:labels) if(r.buttons&mask) out<<label<<L" ";
+            if(r==PadReport{}) out<<L"已归零";
+        }
+        out<<L"\r\n";
+    }
+    out<<L"已观察到有效输入：P1 "<<(live_activity[0]?L"是":L"否")<<L" / P2 "<<(live_activity[1]?L"是":L"否");
+    const auto text=out.str();
+    // Avoid unnecessary redraws while the held state is unchanged.
+    wchar_t previous[1024]{};
+    GetWindowTextW(preview_label,previous,static_cast<int>(std::size(previous)));
+    if(text!=previous) SetWindowTextW(preview_label,text.c_str());
+}
+
 bool start_preview(HWND w) {
     stop(L"已暂停。");
     if(!config_ok||GetForegroundWindow()!=w) {message(L"请先修复配置并返回主窗口。");return false;}
@@ -522,11 +579,11 @@ bool device_self_check(HWND w) {
     const bool ok=readback(*session);
     device_verified=ok;
     if(!ok) {detach();message(L"E208：自检失败，设备已尝试释放。请反馈控制台。");return false;}
-    stop(ok?L"设备自检通过：两个设备输出、隔离和归零通过。":L"E208：设备自检失败，请复制诊断和控制台结果。");
-    return ok;
+    stop(L"设备自检通过：两个设备输出、隔离和归零通过。下一步点击真实设备本窗测试。");
+    return device_verified;
 }
 void next_guide(HWND w) {
-    if(guide_stage<0||guide_stage>=5) {
+    if(guide_stage<0||guide_stage>=6) {
         guide_stage=0;
         SetWindowTextW(guide_label,L"第1/4步：无需游戏或驱动。下一步开启离线预览。默认键位 W、方向键、Q、Shift+Q。");
         return;
@@ -550,7 +607,11 @@ void next_guide(HWND w) {
     } else if(guide_stage==4) {
         if(!device_self_check(w)) return;
         guide_stage=5;
-        SetWindowTextW(guide_label,L"引导完成：设备底层自检通过。游戏兼容性仍待验证；可继续人工测试并反馈。");
+        SetWindowTextW(guide_label,L"设备底层自检通过。下一步开启真实设备本窗测试，分别操作 P1/P2。");
+    } else if(guide_stage==5) {
+        if(!arm(w)) return;
+        guide_stage=6;
+        SetWindowTextW(guide_label,L"请按住各角色的移动键和技能键，观察真实回读、独立性与松键归零。F10 暂停。游戏兼容性仍待验证。");
     }
 }
 
@@ -622,7 +683,10 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         if(wp==select_timer&&countdown) {
             KillTimer(w,select_timer);countdown=false;
             if(!arm(GetForegroundWindow())) std::cout<<"E302: Could not arm selected window; check connection, focus and released keys.\n";
-        } else if(wp==monitor_timer&&(armed||preview)&&!valid_focus()) stop(L"已暂停：目标窗口失去焦点。");
+        } else if(wp==monitor_timer&&(armed||preview)) {
+            if(!valid_focus()) stop(L"已暂停：目标窗口失去焦点。");
+            else if(armed&&target==self) live_readback();
+        }
         return 0;
     case WM_INPUT:
         raw(lp);return DefWindowProcW(w,m,wp,lp);
@@ -663,7 +727,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.13 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.14 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -677,7 +741,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.13 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.14 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

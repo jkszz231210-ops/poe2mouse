@@ -138,6 +138,13 @@ inline bool distinct_slots(Session& s,std::array<ULONG,2>& index) {
     return index[0]<XUSER_MAX_COUNT&&index[1]<XUSER_MAX_COUNT&&index[0]!=index[1]&&
         connected_mask(mask)&&(mask&(1u<<index[0]))&&(mask&(1u<<index[1]));
 }
+inline bool read_report(DWORD slot,Report& report) {
+    XINPUT_STATE s{};
+    if(slot>=XUSER_MAX_COUNT||XInputGetState(slot,&s)!=ERROR_SUCCESS) return false;
+    const auto& g=s.Gamepad;
+    report={g.wButtons,g.bLeftTrigger,g.bRightTrigger,g.sThumbLX,g.sThumbLY,g.sThumbRX,g.sThumbRY};
+    return true;
+}
 inline bool matches(DWORD slot,const Report& expected) {
     for(unsigned retry=0;retry<80;++retry) {
         XINPUT_STATE s{};
