@@ -29,13 +29,16 @@ struct Api {
         return f!=nullptr;
     }
     bool load(const std::filesystem::path& path) {
+        if(dll) {FreeLibrary(dll);dll=nullptr;}
         dll=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
         if(!dll) { std::cout<<"E201 DLL load failed: "<<GetLastError()<<"\n"; return false; }
-        return bind(alloc,"vigem_alloc")&&bind(free_client,"vigem_free")&&
+        const bool ok=bind(alloc,"vigem_alloc")&&bind(free_client,"vigem_free")&&
             bind(connect,"vigem_connect")&&bind(disconnect,"vigem_disconnect")&&
             bind(alloc_pad,"vigem_target_x360_alloc")&&bind(free_pad,"vigem_target_free")&&
             bind(add,"vigem_target_add")&&bind(remove,"vigem_target_remove")&&
             bind(update,"vigem_target_x360_update")&&bind(user_index,"vigem_target_x360_get_user_index");
+        if(!ok) {FreeLibrary(dll);dll=nullptr;}
+        return ok;
     }
     ~Api(){if(dll) FreeLibrary(dll);}
     Api()=default; Api(const Api&)=delete; Api& operator=(const Api&)=delete;

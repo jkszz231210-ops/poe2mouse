@@ -1,7 +1,7 @@
 # PoE2Mouse
 Windows-native keyboard and mouse input management research for local co-op. Primary goal: a single physical keyboard and mouse for two characters, preserving native keyboard/mouse interaction when supported. Physical controllers are optional.
 
-## v0.1.9 test lab
+## v0.1.10 test lab
 Self-contained local two-character movement and action simulator, portable C++20 state engine, profile import/export/reload and Windows packaging. **This is not a PoE2 game adapter and cannot control characters in the actual game.** It only accepts foreground input in its own window.
 
 Download the Windows test package from a successful [Actions run](https://github.com/jkszz231210-ops/poe2mouse/actions) on dev/bootstrap. Unzip all files and run input_lab.exe. See HOME_TEST.md and [中文使用与反馈说明](docs/FEEDBACK.md). Help menu can copy or save a bounded diagnostic report; no automatic logs or uploads. No driver, Python or third-party runtime dependencies for this lab; Windows runtime verification remains pending.
@@ -26,3 +26,5 @@ Experimental independent input bridge: [BRIDGE_TEST.md](docs/BRIDGE_TEST.md). Re
 [Release acceptance checklist](docs/ACCEPTANCE.md): native targeting first, disconnect/reconnect without exit, trade, crash recovery, feedback and performance. The bridge starts with devices detached; all transitions remain unverified on real Windows hardware.
 
 See [issue ledger](docs/ISSUE_LOG.md). 0.1.9 adds manual full controller test controls, held-key aggregation and bridge diagnostic copy. Real driver/game compatibility still pending.
+
+**Start here:** [中文快速开始](docs/QUICK_START.md). Main executable `input_bridge.exe` opens even without SDK/driver. Embedded tutorial, explicit dependency check, actual binding view and reload. No verified game compatibility yet.
