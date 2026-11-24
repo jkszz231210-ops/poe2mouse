@@ -21,7 +21,7 @@ using Clock=std::chrono::steady_clock;
 Clock::time_point last;
 bool ticking=false;
 constexpr UINT_PTR timer_id=1;
-enum : UINT { import_id=100,export_id,reload_id,reset_id,report_id,copy_id,help_id,devices_id };
+enum : UINT { import_id=100,export_id,reload_id,reset_id,report_id,copy_id,help_id,devices_id,editor_id };
 void clock_state(HWND w) {
     const bool want=pm::Arena::moving(engine.state());
     if(want && !ticking) {
@@ -44,7 +44,7 @@ void text(HDC dc,int x,int y,const wchar_t* t) { TextOutW(dc,x,y,t,lstrlenW(t));
 void draw(HDC dc,RECT area) {
     FillRect(dc,&area,reinterpret_cast<HBRUSH>(COLOR_WINDOW+1));
     SetBkMode(dc,TRANSPARENT);
-    text(dc,20,15,L"PoE2Mouse 0.1.3 | Offline two-character input lab");
+    text(dc,20,15,L"PoE2Mouse 0.1.4 | Offline two-character input lab");
     text(dc,20,39,L"WASD: both  |  Shift/Ctrl: P1/P2 movement  |  L/R mouse: separate attacks");
     RECT field{20,70,480,260}; FrameRect(dc,&field,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
     RECT wall{225,112,275,218}; FillRect(dc,&wall,reinterpret_cast<HBRUSH>(GetStockObject(GRAY_BRUSH)));
@@ -64,17 +64,17 @@ void draw(HDC dc,RECT area) {
             SelectObject(dc,old);
         }
         text(dc,x+10,y-12,p==0?L"P1":L"P2");
-        const int col=20+static_cast<int>(p)*240;
+        const int col=20+static_cast<int>(p)*335;
         text(dc,col,278,p==0?L"PLAYER 1":L"PLAYER 2");
         for(unsigned i=0;i<pm::action_count;++i) {
             std::wstring label(pm::names[i].begin(),pm::names[i].end());
             label+=a[i]?L"  [ACTIVE]":L"  [idle]";
             SetTextColor(dc,a[i]?RGB(0,110,70):RGB(90,90,90));
-            text(dc,col,305+static_cast<int>(i)*19,label.c_str());
+            text(dc,col+static_cast<int>(i/13)*155,305+static_cast<int>(i%13)*19,label.c_str());
         }
         SetTextColor(dc,RGB(0,0,0));
     }
-    text(dc,20,486,L"Profile: import/export/reload. Help: usage and diagnostics. Offline lab only.");
+    text(dc,20,567,L"Profile: import/export/reload. Help: usage and diagnostics. Offline lab only.");
 }
 bool load(const std::filesystem::path& path,pm::Profile& result) {
     std::ifstream in(path); std::string error;
@@ -132,12 +132,12 @@ std::string make_report() {
     SYSTEM_INFO sys{}; GetNativeSystemInfo(&sys);
     MEMORYSTATUSEX memory{}; memory.dwLength=sizeof(memory);
     out << "PoE2Mouse diagnostic report\n"
-        << "app_version: 0.1.3\nprofile_schema_supported: 1,2\ngame_adapter: none (offline lab)\n"
+        << "app_version: 0.1.4\nprofile_schema_supported: 1,2,3\ngame_adapter: none (offline lab)\n"
         << "logical_processors: " << sys.dwNumberOfProcessors << '\n';
     if(GlobalMemoryStatusEx(&memory))
         out << "physical_memory_mib: " << memory.ullTotalPhys/1048576ULL << '\n';
     std::size_t bindings=0;
-    for(const auto& b:profile) if(b.target!=pm::Target::none) ++bindings;
+    for(const auto& layer:profile.layers) for(const auto& b:layer) if(b.target!=pm::Target::none) ++bindings;
     out << "configured_bindings: " << bindings << '\n';
     out << device_report();
     diagnostics.write(out);
@@ -173,7 +173,79 @@ bool write_report(const std::string& report) {
     if(!ok) DeleteFileW(temp);
     return ok;
 }
+// Native text-based binding editor; no external editor or file writes until Apply.
+struct Editor { HWND owner{},window{},edit{}; bool applied=false; };
+enum : UINT { apply_binding_id=200,cancel_binding_id };
+LRESULT CALLBACK editor_proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
+    if(m==WM_NCCREATE) {
+        auto* cs=reinterpret_cast<CREATESTRUCTW*>(lp);
+        SetWindowLongPtrW(w,GWLP_USERDATA,reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+    }
+    auto* e=reinterpret_cast<Editor*>(GetWindowLongPtrW(w,GWLP_USERDATA));
+    if(!e) return DefWindowProcW(w,m,wp,lp);
+    if(m==WM_CREATE) {
+        const auto inst=reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(w,GWLP_HINSTANCE));
+        CreateWindowW(L"STATIC",L"key target action [mask] | 1=Shift 2=Ctrl 4=Alt | slot1..slot13, flask1/2",WS_CHILD|WS_VISIBLE,10,10,665,25,w,nullptr,inst,nullptr);
+        e->edit=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",L"",WS_CHILD|WS_VISIBLE|WS_TABSTOP|WS_VSCROLL|WS_HSCROLL|ES_MULTILINE|ES_AUTOVSCROLL|ES_AUTOHSCROLL|ES_WANTRETURN,10,40,665,360,w,nullptr,inst,nullptr);
+        if(!e->edit) return -1;
+        SendMessageW(e->edit,EM_SETLIMITTEXT,65536,0);
+        SendMessageW(e->edit,WM_SETFONT,reinterpret_cast<WPARAM>(GetStockObject(ANSI_FIXED_FONT)),TRUE);
+        std::ostringstream out; pm::write_profile(out,profile);
+        std::wstring text;
+        for(char c:out.str()) { if(c=='\n') text+=L'\r'; text+=static_cast<wchar_t>(static_cast<unsigned char>(c)); }
+        SetWindowTextW(e->edit,text.c_str());
+        CreateWindowW(L"BUTTON",L"Apply and save",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,385,415,135,30,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(apply_binding_id)),inst,nullptr);
+        CreateWindowW(L"BUTTON",L"Cancel",WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_PUSHBUTTON,535,415,135,30,w,reinterpret_cast<HMENU>(static_cast<UINT_PTR>(cancel_binding_id)),inst,nullptr);
+        return 0;
+    }
+    if(m==WM_COMMAND && LOWORD(wp)==apply_binding_id) {
+        const int n=GetWindowTextLengthW(e->edit);
+        if(n<0||n>65536) return 0;
+        std::wstring wide(static_cast<std::size_t>(n)+1,L'\0');
+        const int copied=GetWindowTextW(e->edit,wide.data(),n+1);
+        std::string raw;
+        for(int i=0;i<copied;++i) {
+            const auto ch=wide[static_cast<std::size_t>(i)];
+            if(ch>127) { notify(w,L"E102: Use ASCII key codes and action names."); return 0; }
+            raw+=static_cast<char>(ch);
+        }
+        pm::Profile next{}; std::string error; std::istringstream in(raw);
+        if(!pm::read_profile(in,next,error)) {
+            diagnostics.record(pm::Event::profile_invalid);
+            std::wstring msg=L"E102: "; msg.append(error.begin(),error.end()); notify(w,msg.c_str()); return 0;
+        }
+        if(!save(profile_path,next)) {
+            diagnostics.record(pm::Event::profile_write_failed);
+            notify(w,L"E103: Save failed. Previous bindings retained."); return 0;
+        }
+        profile=next; engine.set_profile(profile); diagnostics.record(pm::Event::profile_imported);
+        e->applied=true; DestroyWindow(w); return 0;
+    }
+    if(m==WM_CLOSE||(m==WM_COMMAND&&LOWORD(wp)==cancel_binding_id)) { DestroyWindow(w); return 0; }
+    if(m==WM_DESTROY) { e->window=nullptr; return 0; }
+    return DefWindowProcW(w,m,wp,lp);
+}
+void edit_bindings(HWND owner) {
+    clear(owner);
+    const auto inst=reinterpret_cast<HINSTANCE>(GetWindowLongPtrW(owner,GWLP_HINSTANCE));
+    WNDCLASSW wc{}; wc.hInstance=inst; wc.lpfnWndProc=editor_proc;
+    wc.lpszClassName=L"PoE2MouseBindingEditor"; wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);
+    wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
+    if(!RegisterClassW(&wc)&&GetLastError()!=ERROR_CLASS_ALREADY_EXISTS) return;
+    Editor e{}; e.owner=owner;
+    e.window=CreateWindowExW(WS_EX_DLGMODALFRAME,wc.lpszClassName,L"Edit bindings - schema 3",WS_CAPTION|WS_SYSMENU,CW_USEDEFAULT,CW_USEDEFAULT,705,495,owner,nullptr,inst,&e);
+    if(!e.window) return;
+    EnableWindow(owner,FALSE); ShowWindow(e.window,SW_SHOW); SetFocus(e.edit);
+    MSG msg{};
+    while(e.window) {
+        const BOOL result=GetMessageW(&msg,nullptr,0,0);
+        if(result<=0) { if(e.window) DestroyWindow(e.window); if(result==0) PostQuitMessage(static_cast<int>(msg.wParam)); break; }
+        TranslateMessage(&msg); DispatchMessageW(&msg);
+    }
+    EnableWindow(owner,TRUE); SetActiveWindow(owner); clear(owner);
+}
 void file_command(HWND w,UINT id) {
+    if(id==editor_id) { edit_bindings(w); return; }
     if(id==devices_id) {
         clear(w);
         const auto report=device_report();
@@ -182,7 +254,7 @@ void file_command(HWND w,UINT id) {
     }
     if(id==help_id) {
         clear(w);
-        notify(w,L"Offline lab only. WASD: both; Shift/Ctrl: P1/P2 movement (schema 2 defaults); arrows: P2; left/right mouse: independent attacks; Q/E: skills; Space: dodge. Edit or import lab.profile. For issues, use Help > Copy diagnostic report, then paste it with reproduction steps into GitHub Issues or your support chat. See HOME_TEST.md and FEEDBACK.md.");
+        notify(w,L"Offline lab only. WASD: both; Shift/Ctrl: P1/P2 movement (schema 2 defaults); arrows: P2; left/right mouse: independent attacks; Q/E: skills; Space: dodge. Profile > Edit bindings, or import lab.profile. Schema 3: key target action [modifier mask]. For issues, use Help > Copy diagnostic report, then paste it with reproduction steps into GitHub Issues or your support chat. See HOME_TEST.md and FEEDBACK.md.");
         return;
     }
     if(id==report_id || id==copy_id) {
@@ -197,7 +269,9 @@ void file_command(HWND w,UINT id) {
     if(id==reset_id) { diagnostics.record(pm::Event::arena_reset); arena.reset(); InvalidateRect(w,nullptr,FALSE); return; }
     if(id==reload_id) {
         pm::Profile next{};
-        if(load(std::filesystem::exists(profile_path)?profile_path:default_profile_path,next)) { diagnostics.record(pm::Event::profile_loaded); profile=next; engine.set_profile(profile); notify(w,L"Profile reloaded."); }
+        std::error_code ec;
+        const bool exists=std::filesystem::exists(profile_path,ec);
+        if(!ec && load(exists?profile_path:default_profile_path,next)) { diagnostics.record(pm::Event::profile_loaded); profile=next; engine.set_profile(profile); notify(w,L"Profile reloaded."); }
         else { diagnostics.record(pm::Event::profile_invalid); notify(w,L"E102: Invalid or missing profile. Previous configuration retained."); }
         return;
     }
@@ -279,6 +353,7 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     if(!RegisterClassW(&wc)) return 1;
     HMENU menu=CreateMenu(),sub=CreatePopupMenu(),help=CreatePopupMenu();
     if(!menu || !sub || !help) { if(menu) DestroyMenu(menu); if(sub) DestroyMenu(sub); if(help) DestroyMenu(help); return 1; }
+    AppendMenuW(sub,MF_STRING,editor_id,L"Edit bindings...");
     AppendMenuW(sub,MF_STRING,import_id,L"Import profile...");
     AppendMenuW(sub,MF_STRING,export_id,L"Export profile...");
     AppendMenuW(sub,MF_STRING,reload_id,L"Reload profile");
@@ -289,8 +364,8 @@ int WINAPI wWinMain(HINSTANCE instance,HINSTANCE,PWSTR,int show) {
     AppendMenuW(help,MF_STRING,copy_id,L"Copy diagnostic report");
     AppendMenuW(help,MF_STRING,report_id,L"Save diagnostics.txt");
     AppendMenuW(menu,MF_POPUP,reinterpret_cast<UINT_PTR>(help),L"Help");
-    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.3",
-        WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,720,610,nullptr,menu,instance,nullptr);
+    HWND w=CreateWindowExW(0,wc.lpszClassName,L"PoE2Mouse Input Lab 0.1.4",
+        WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,760,680,nullptr,menu,instance,nullptr);
     if(!w) { DestroyMenu(menu); return 1; }
     ShowWindow(w,show);
     MSG msg{}; BOOL result;

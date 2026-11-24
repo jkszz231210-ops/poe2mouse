@@ -1,4 +1,4 @@
-# Capability status (0.1.3)
+# Capability status (0.1.4)
 | Capability | Status |
 |---|---|
 | C++20 core, local P1/P2 shared and independent action state | implemented |
@@ -6,11 +6,12 @@
 | Windows foreground keyboard/mouse diagnostic | implemented |
 | Local movement simulation, wall and speed divergence | implemented |
 | Profile import/export, reload and persistence | implemented; interactive Windows test pending |
-| Portable Windows package workflow | 0.1.2 CI passed; 0.1.3 CI pending |
+| Portable Windows package workflow | 0.1.3 CI passed; 0.1.4 CI pending |
 | Bounded diagnostics, explicit clipboard/file export, Chinese feedback guide | implemented; CI and Windows interactive validation pending |
 | Schema 1/2 compatibility, movement-only solo modifiers, upgrade-safe defaults | implemented; latest CI pending |
 | Read-only Raw Input enumeration and XInput slot snapshot | implemented; Windows manual verification pending |
-| GUI key capture/rebinding | planned |
+| Native text binding editor, schema 3 chords, 13 logical skill slots per player | implemented; CI and manual validation pending |
+| Graphical key capture, wheel binding, actual game slot mapping | planned |
 | Raw Input event routing, device identity, physical controller input/output | planned |
 | Game-facing adapter, PoE2 native key import and hot switching | not implemented or verified |
 | Later game version compatibility | architecture goal |

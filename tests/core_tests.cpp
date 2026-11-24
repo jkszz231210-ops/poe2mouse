@@ -33,7 +33,7 @@ int main() {
     e.input(87,true); e.set_profile(p);
     check(e.state()==Engine::State{},"profile replacement reset");
     check(!e.input(300,true),"out of range");
-    for (auto bad : {"schema 3\n", "87 both up\n", "schema 1\n87 both up\n87 p1 up\n",
+    for (auto bad : {"schema 4\n", "87 both up\n", "schema 1\n87 both up\n87 p1 up\n",
                     "schema 1\n256 p1 up\n", "schema 1\n1 invalid up\n",
                     "schema 1\n1 p1 unknown\n", "schema 1\n-1 p1 up\n",
                     "schema 1\n1 p1 up extra\n"}) {
@@ -65,6 +65,35 @@ int main() {
     check(e.state()==Engine::State{},"release all after modifier changes");
     std::istringstream illegal("schema 2\n16 p1 solo_p1\n");
     check(!read_profile(illegal,v2,error),"reject invalid modifier target");
+    e.set_profile(roundtrip);
+    Profile v3{};
+    std::istringstream v3source("schema 3\n81 p1 slot1\n81 p2 slot13 1\n81 p1 flask1 2\n81 p2 weapon_swap 3\n16 both solo_p1\n");
+    check(read_profile(v3source,v3,error),"schema 3 chords");
+    e.set_profile(v3);
+    e.input(16,true); e.input(81,true);
+    const auto slot13=static_cast<unsigned>(Action::slot13);
+    const auto slot1=static_cast<unsigned>(Action::slot1);
+    check(e.state()[1][slot13]==1&&e.state()[0][slot1]==0,"chord precedence");
+    e.input(16,false);
+    check(e.state()[1][slot13]==1,"held action stays latched");
+    e.input(81,false);
+    check(e.state()==Engine::State{},"release after modifier change");
+    e.input(81,true); e.input(16,true);
+    check(e.state()[0][slot1]==1&&e.state()[1][slot13]==0,"modifier after action does not switch skill");
+    e.reset();
+    e.input(16,true); e.input(17,true); e.input(81,true);
+    check(e.state()[1][static_cast<unsigned>(Action::weapon_swap)]==1,"combined modifiers");
+    e.reset();
+    std::ostringstream v3serialized;
+    check(write_profile(v3serialized,v3),"schema 3 serialize");
+    std::istringstream v3again(v3serialized.str()); Profile v3round{};
+    check(read_profile(v3again,v3round,error),"schema 3 round trip");
+    check(v3round.layers[1][81].action==Action::slot13,"chord preserved");
+    for(auto bad:{"schema 3\n81 p1 slot1 8\n","schema 3\n81 p1 slot1 1\n81 p2 slot2 1\n","schema 2\n81 p1 slot13\n","schema 3\n16 p1 slot1 1\n"}) {
+        std::istringstream rejected(bad);
+        check(!read_profile(rejected,v3,error),"invalid chord rejected");
+        check(v3.layers[1][81].action==Action::slot13,"failed edit preserves prior profile");
+    }
     e.set_profile(roundtrip);
     Arena arena;
     e.set_profile(roundtrip);

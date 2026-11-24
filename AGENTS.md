@@ -12,3 +12,5 @@
 1. Functionality and reproducible usage: get the smallest real feature working, explicitly state limitations, supply a concise Chinese quick-start and recovery instructions.
 2. Feedback and observability are release gates from the first testable build: stable error identifiers, privacy-safe bounded diagnostics, minimal reproduction instructions, and regression tests for confirmed defects. No automatic upload or raw keystroke logging. Diagnostics should be exportable without installing development tools.
 3. After repeated real usage, prioritize ergonomics and counterintuitive bindings, configuration migration and stability. Cosmetic polish follows functional validation.
+
+- Model native game action slots separately from physical bindings. Do not invent extra game slots or assume keyboard and controller layouts are identical. Preserve the ability to bind independent role actions and user-selectable modifiers. Confirm actual slot mappings per game version and input mode.
