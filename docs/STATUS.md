@@ -1,14 +1,16 @@
-# Capability status
+# Capability status (0.1.1)
 | Capability | Status |
 |---|---|
-| C++20 core, explicit P1/P2 local state | implemented; Linux GCC 14.2 core checks passed |
-| Schema 1 profile loading and validation | implemented; Linux GCC 14.2 core checks passed |
-| Windows foreground keyboard/mouse diagnostic | implemented; Windows build and runtime pending |
-| Config writer, GUI rebind/import/export, migrations | planned |
+| C++20 core, local P1/P2 shared and independent action state | implemented |
+| Schema 1 profile loading, validation, serialization | implemented |
+| Windows foreground keyboard/mouse diagnostic | implemented |
+| Local movement simulation, wall and speed divergence | implemented |
+| Profile import/export, reload and persistence | implemented; interactive Windows test pending |
+| Portable Windows package workflow | configured; latest build pending |
+| GUI key capture/rebinding, schema migration | planned |
 | Raw Input, device identity, physical controller | planned |
-| Game-facing adapter, PoE2 native key import, 1.0 hot switching | unverified / not implemented |
-| 1.1+ compatibility | architectural goal; not verified |
-| Performance, 72-hour run | not measured |
-The simulator has no OS input synthesis, hooks, game connection or virtual driver. It only displays its own input state. No release binary yet.
-
-Verification: GCC 14.2, C++20, -O2 -Wall -Wextra -Wpedantic -Werror; compiled and ran core_tests successfully in Linux. The local copies of the header and test source were verified against Git blob IDs c092dc137a23dd57f77d8396cd20bf1a429c82e6 and c772ac0f6b50c9815d9148925f8ac71351d7c76e. Windows and CI verification remain pending.
+| Game-facing adapter, PoE2 native key import and hot switching | not implemented or verified |
+| Later game version compatibility | architecture goal |
+| Performance / 72-hour tests | not measured |
+Prior baseline commit 9c6b58a passed both Windows and Ubuntu build/CTest: https://github.com/jkszz231210-ops/poe2mouse/actions/runs/45322230981
+The new revision requires its own CI and manual verification. No game output, hooks, virtual driver or telemetry.

@@ -1,4 +1,5 @@
 #include "poe2mouse/input_core.hpp"
+#include "poe2mouse/arena.hpp"
 #include <iostream>
 #include <cstdlib>
 using namespace pm;
@@ -39,5 +40,31 @@ int main() {
         check(!read_profile(invalid,p,error) && !error.empty(),"invalid profile rejection");
         check(p[87].target==Target::both,"transactional preservation");
     }
+    std::ostringstream serialized;
+    check(write_profile(serialized,p),"serialize");
+    Profile roundtrip{};
+    std::istringstream again(serialized.str());
+    check(read_profile(again,roundtrip,error),"read serialized profile");
+    for(std::size_t i=0;i<p.size();++i)
+        check(p[i].target==roundtrip[i].target && p[i].action==roundtrip[i].action,"round trip");
+    Arena arena;
+    e.set_profile(roundtrip);
+    e.input(87,true);
+    const auto start=arena.positions();
+    arena.step(e.state(),0.05);
+    check(arena.positions()[0].y<start[0].y && arena.positions()[1].y<start[1].y,"both lab characters move");
+    check(arena.positions()[0].y-start[0].y < arena.positions()[1].y-start[1].y,"different movement speeds");
+    e.input(87,false);
+    e.input(38,true);
+    const auto before=arena.positions();
+    arena.step(e.state(),0.05);
+    check(arena.positions()[0].y==before[0].y && arena.positions()[1].y<before[1].y,"independent lab movement");
+    e.reset();
+    check(!Arena::moving(e.state()),"no timer required when neutral");
+    arena.reset();
+    Engine::State right{};
+    right[0][static_cast<unsigned>(Action::right)]=1;
+    for(int i=0;i<100;++i) arena.step(right,0.05);
+    check(arena.positions()[0].x<=205-Arena::radius,"wall collision");
     std::cout << "All core checks passed\n";
 }

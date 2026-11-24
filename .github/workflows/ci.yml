@@ -20,3 +20,14 @@ jobs:
       - run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
       - run: cmake --build build --config Release
       - run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage portable lab
+        if: runner.os == 'Windows'
+        run: cmake --install build --config Release --prefix dist
+      - name: Upload Windows test package
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: poe2mouse-lab-windows-x64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14

@@ -2,6 +2,7 @@
 #include <array>
 #include <cstddef>
 #include <istream>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -65,6 +66,19 @@ inline bool read_profile(std::istream& in, Profile& out, std::string& error) {
     return true;
 }
 
+// Canonical, portable serialization. No execution or embedded paths.
+inline bool write_profile(std::ostream& out, const Profile& p) {
+    out << "schema 1\n";
+    for (std::size_t k=1; k<p.size(); ++k) {
+        const auto b=p[k];
+        if (b.target==Target::none) continue;
+        const auto a=static_cast<std::size_t>(b.action);
+        const char* target=b.target==Target::p1?"p1":b.target==Target::p2?"p2":b.target==Target::both?"both":nullptr;
+        if (!target || a>=names.size()) return false;
+        out << k << ' ' << target << ' ' << names[a] << '\n';
+    }
+    return static_cast<bool>(out);
+}
 class Engine {
 public:
     using State = std::array<std::array<unsigned,action_count>,2>;

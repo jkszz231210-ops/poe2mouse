@@ -1,16 +1,19 @@
 # PoE2Mouse
-Windows-native keyboard and mouse input management research for local co-op. A single physical keyboard/mouse is the primary input; physical controllers are optional. Native game input is preferred when supported.
+Windows-native keyboard and mouse input management research for local co-op. Primary goal: a single physical keyboard and mouse for two characters, preserving native keyboard/mouse interaction when supported. Physical controllers are optional.
 
-## v0.1 development baseline
-A self-contained local input lab and portable C++20 state engine. **Not a working PoE2 adapter.** The lab only displays logical P1/P2 action states in its own window; it does not send inputs to other applications.
+## v0.1.1 test lab
+Self-contained local two-character movement and action simulator, portable C++20 state engine, profile import/export/reload and Windows packaging. **This is not a PoE2 game adapter and cannot control characters in the actual game.** It only accepts foreground input in its own window.
+
+Download the Windows test package from a successful [Actions run](https://github.com/jkszz231210-ops/poe2mouse/actions) on dev/bootstrap. Unzip all files and run input_lab.exe. See HOME_TEST.md. No driver, Python or third-party runtime dependencies for this lab; Windows runtime verification remains pending.
 
 ## Build
-Install CMake 3.22+ and a C++20 compiler. On Windows use Visual Studio 2022 with Desktop development with C++.
+CMake 3.22+ and C++20 compiler. Windows: Visual Studio 2022 Desktop development with C++.
 ```powershell
 cmake -S . -B build
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
+cmake --install build --config Release --prefix dist
 ```
-Open build/Release/input_lab.exe (or build/input_lab.exe for single-config generators). The profile is copied next to the binary. Edit lab.profile to rebind every mapped action; restart the lab to reload. WASD and space are shared logical test actions; left/right mouse and Q/E test separate actions; arrow keys test P2 movement. The lab does not record key history. No third-party dependencies, network service or driver required for this milestone.
+On Windows the dist folder contains the portable test application. Every mapped action is configurable in lab.profile; use the Profile menu to import/export/reload.
 
-See [engineering contract](AGENTS.md), [architecture](docs/ARCHITECTURE.md) and [status](docs/STATUS.md). Game versions, app releases and profile schema are independent.
+See [engineering contract](AGENTS.md), [architecture](docs/ARCHITECTURE.md), [status](docs/STATUS.md) and [home test guide](docs/HOME_TEST.md).
