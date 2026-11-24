@@ -39,7 +39,12 @@ HWND self=nullptr,target=nullptr,status=nullptr;
 DWORD target_pid=0;
 HWINEVENTHOOK focus_hook=nullptr;
 bool armed=false,countdown=false,raw_registered=false,cleanup_failed=false;
-constexpr UINT_PTR monitor_timer=1,select_timer=2;
+HWND pending_window=nullptr;
+DWORD pending_pid=0;
+ULONGLONG release_deadline=0;
+unsigned released_ticks=0;
+const char* last_arm_result="not attempted";
+constexpr UINT_PTR monitor_timer=1,select_timer=2,release_timer=3;
 enum : UINT { self_id=100,external_id,stop_id,attach_id,detach_id,report_id,check_id,help_id,keys_id,driver_id,config_id,guide_id,preview_id,native_id,readback_id };
 enum : UINT { edit_list_id=200,edit_role_id,edit_apply_id,edit_new_id,edit_remove_id };
 void message(const wchar_t* s) { if(status) SetWindowTextW(status,s); }
@@ -73,7 +78,8 @@ bool raw_registration(bool enable,bool local=false) {
 void stop(const wchar_t* reason) {
     if(armed) diagnostics.record(Event::bridge_paused);
     armed=false;preview=false; countdown=false;target=nullptr;target_pid=0;live_monitor.reset();
-    if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);}
+    pending_window=nullptr;pending_pid=0;released_ticks=0;release_deadline=0;
+    if(self) {KillTimer(self,monitor_timer);KillTimer(self,select_timer);KillTimer(self,release_timer);}
     engine.reset();physical_keys.reset();refresh_preview();
     const bool unregistered=!raw_registered||raw_registration(false);
     bool ok=true;
@@ -130,24 +136,92 @@ bool valid_focus() {
 void CALLBACK focus_changed(HWINEVENTHOOK,DWORD,HWND,LONG,LONG,DWORD,DWORD) {
     if((armed||preview)&&GetForegroundWindow()!=target) stop(L"已暂停：离开目标窗口。需手动重新启用。");
 }
+bool arm_failure(const char* code,const wchar_t* why) {
+    last_arm_result=code;
+    std::cout<<"Arm blocked: "<<code<<"\n";
+    message(why);return false;
+}
+bool ready_to_arm() {
+    if(!config_ok) return arm_failure("E302-A invalid configuration",L"E302-A：配置无效，请重新读取配置。");
+    if(cleanup_failed||!session||!session->connected||session->closed)
+        return arm_failure("E302-B devices unavailable",L"E302-B：设备未连接或清理异常，请检查连接。");
+    if(!device_verified) return arm_failure("E302-C self-check required",L"E302-C：请先完成本次连接的设备输出自检。");
+    if(!focus_hook) return arm_failure("E302-D focus monitor unavailable",L"E302-D：焦点监控不可用。");
+    return true;
+}
+bool relevant_keys_down() {
+    // Check mapped physical keys, the pause key and modifiers, not unrelated VKs.
+    // No input history is recorded. This runs only during explicit arming.
+    for(unsigned k=1;k<key_count;++k) {
+        bool relevant=k==options.pause_key||k==VK_SHIFT||k==VK_CONTROL||k==VK_MENU||
+            k==VK_LWIN||k==VK_RWIN||k==VK_LBUTTON||k==VK_RBUTTON||k==VK_MBUTTON||
+            k==VK_XBUTTON1||k==VK_XBUTTON2;
+        for(const auto& layer:current_profile.layers)
+            relevant=relevant||layer[k].target!=Target::none;
+        if(relevant&&(GetAsyncKeyState(static_cast<int>(k))&0x8000)) return true;
+    }
+    return false;
+}
 bool arm(HWND w) {
     stop(L"已暂停。");
-    if(!device_verified) {message(L"请先完成设备输出自检。");return false;}
-    if(!config_ok||!session||!session->connected||session->closed||cleanup_failed||!w||!IsWindow(w)||w==GetDesktopWindow()) return false;
-    DWORD pid=0;GetWindowThreadProcessId(w,&pid);
-    if(!pid||GetForegroundWindow()!=w||!focus_hook) return false;
-    // A held key at arm time must be released before the next session.
-    for(int k=1;k<256;++k) if(GetAsyncKeyState(k)&0x8000) {message(L"请松开全部按键和鼠标按钮后重试。");return false;}
-    if(!raw_registration(true)) return false;
+    if(!ready_to_arm()) return false;
+    DWORD pid=0;
+    if(!w||!IsWindow(w)||w==GetDesktopWindow()||GetForegroundWindow()!=w||
+       !GetWindowThreadProcessId(w,&pid)||!pid)
+        return arm_failure("E302-E target focus invalid",L"E302-E：目标窗口未在前台或已关闭。");
+    if(relevant_keys_down())
+        return arm_failure("E302-F mapped key still held",L"E302-F：请松开映射按键、修饰键和鼠标按钮后重试。");
+    if(!raw_registration(true))
+        return arm_failure("E301 raw registration failed",L"E301：Windows 输入注册失败，请复制诊断。");
     target=w;target_pid=pid;armed=true;live_monitor.reset();live_activity={};
     if(w==self) SetFocus(self);
     diagnostics.record(Event::bridge_armed);
     if(!SetTimer(self,monitor_timer,50,nullptr)) {
-        stop(L"E302：无法启动焦点监控。");return false;
+        stop(L"已暂停。");
+        return arm_failure("E302-G monitor timer failed",L"E302-G：无法启动焦点监控。");
     }
+    last_arm_result=w==self?"PASS local":"PASS external";
+    std::cout<<"Arm: "<<last_arm_result<<"\n";
     message(w==self?L"真实设备测试：按住 W、方向键、Q、Shift+Q，观察实际回读。F10 或切出窗口暂停。":L"已启用指定窗口。返回本软件即暂停。");
     if(w==self) live_readback();
     return true;
+}
+void begin_release_wait(HWND w) {
+    if(!ready_to_arm()) return;
+    const HWND selected=GetForegroundWindow();
+    DWORD pid=0;
+    if(!selected||selected==w||selected==GetDesktopWindow()||
+       !GetWindowThreadProcessId(selected,&pid)||!pid||pid==GetCurrentProcessId()) {
+        arm_failure("E302-H no external target selected",L"E302-H：倒计时结束时没有选中外部窗口，请重试。");
+        return;
+    }
+    pending_window=selected;pending_pid=pid;released_ticks=0;
+    release_deadline=GetTickCount64()+5000u;
+    if(!SetTimer(w,release_timer,100,nullptr)) {
+        stop(L"已暂停。");
+        arm_failure("E302-I release timer failed",L"E302-I：无法启动等待松键计时器。");return;
+    }
+    last_arm_result="waiting for key release";
+    std::cout<<"Target selected; waiting up to 5 seconds for released inputs.\n";
+    message(L"已选定目标窗口。请松开全部映射键及鼠标，等待启用。");
+}
+void advance_release_wait() {
+    if(!pending_window) return;
+    DWORD pid=0;
+    if(GetForegroundWindow()!=pending_window||!IsWindow(pending_window)||
+       !GetWindowThreadProcessId(pending_window,&pid)||pid!=pending_pid) {
+        stop(L"已暂停。");
+        arm_failure("E302-J target changed during setup",L"E302-J：等待松键期间目标窗口改变，请重新选择。");return;
+    }
+    if(GetTickCount64()>=release_deadline) {
+        stop(L"已暂停。");
+        arm_failure("E302-K release timeout",L"E302-K：等待松键超时。请松开按键后重新选择。");return;
+    }
+    if(relevant_keys_down()) {released_ticks=0;return;}
+    if(++released_ticks<2) return;
+    const HWND selected=pending_window;
+    // arm() rechecks all readiness conditions and cancels this one-shot timer.
+    arm(selected);
 }
 void input(unsigned k,bool down) {
     if(!valid_focus()) { if(armed||preview) stop(L"已暂停：窗口焦点改变。");return; }
@@ -205,7 +279,8 @@ void raw(LPARAM l) {
 }
 void copy_diagnostics(HWND w) {
     std::ostringstream out;
-    out<<"PoE2Mouse bridge 0.1.16\n"
+    out<<"PoE2Mouse bridge 0.1.17\n"
+        <<"last_arm_result: "<<last_arm_result<<"\n"
         <<"device_verified: "<<device_verified<<"\n"
         <<"live_samples: "<<live_samples<<"\nlive_mismatches: "<<live_mismatches<<"\nlive_faults: "<<live_faults<<"\n"
         <<"preview: "<<preview<<"\nnative_pause_vk: "<<options.pause_key<<"\n"
@@ -697,11 +772,11 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
         else if(LOWORD(wp)==attach_id) {if(!attach()) std::cout<<"Attach unsuccessful; see detailed error above.\n";}
         else if(LOWORD(wp)==detach_id) detach();
         else if(LOWORD(wp)==report_id) {stop(L"已暂停以生成报告。");copy_diagnostics(w);}
-        else if(LOWORD(wp)==self_id) {if(!arm(w)) std::cout<<"E302: Cannot arm this window; check connection, focus and released keys.\n";}
+        else if(LOWORD(wp)==self_id) arm(w);
         else if(LOWORD(wp)==external_id) {
             stop(L"已暂停。");
-            if(!session||!session->connected||session->closed) {message(L"请先连接设备。");return 0;}
-            if(MessageBoxW(w,L"仅选择允许独立重映射的应用。本版不屏蔽原生键鼠，未验证 PoE2 游戏兼容性。松开所有按键，确认后在三秒内切到测试窗口。",L"选择目标",MB_OKCANCEL|MB_ICONWARNING)!=IDOK) return 0;
+            if(!ready_to_arm()) return 0;
+            if(MessageBoxW(w,L"仅选择允许独立重映射的应用。本版不屏蔽原生键鼠，未验证 PoE2 游戏兼容性。确认后在三秒内切到测试窗口，随后松开映射键和鼠标按钮。选定后最多等待五秒，不会自动切换目标。",L"选择目标",MB_OKCANCEL|MB_ICONWARNING)!=IDOK) return 0;
             countdown=SetTimer(w,select_timer,3000,nullptr)!=0;
             message(countdown?L"请在三秒内切换目标窗口。":L"E302：选择计时器失败。");
         }
@@ -709,7 +784,9 @@ LRESULT CALLBACK proc(HWND w,UINT m,WPARAM wp,LPARAM lp) {
     case WM_TIMER:
         if(wp==select_timer&&countdown) {
             KillTimer(w,select_timer);countdown=false;
-            if(!arm(GetForegroundWindow())) std::cout<<"E302: Could not arm selected window; check connection, focus and released keys.\n";
+            begin_release_wait(w);
+        } else if(wp==release_timer&&pending_window) {
+            advance_release_wait();
         } else if(wp==monitor_timer&&(armed||preview)) {
             if(!valid_focus()) stop(L"已暂停：目标窗口失去焦点。");
             else if(armed&&target==self) live_readback();
@@ -754,7 +831,7 @@ bool load_configuration() {
 }
 }
 int wmain(int argc,wchar_t** argv) {
-    std::cout<<"PoE2Mouse 0.1.16 independent input bridge\n";
+    std::cout<<"PoE2Mouse 0.1.17 independent input bridge\n";
     wchar_t path[32768]{};
     const DWORD n=GetModuleFileNameW(nullptr,path,static_cast<DWORD>(std::size(path)));
     if(n==0||n>=std::size(path)) return 1;
@@ -768,7 +845,7 @@ int wmain(int argc,wchar_t** argv) {
     const auto inst=GetModuleHandleW(nullptr);
     WNDCLASSW wc{};wc.hInstance=inst;wc.lpfnWndProc=proc;wc.lpszClassName=L"PoE2MouseBridge";wc.hCursor=LoadCursorW(nullptr,IDC_ARROW);wc.hbrBackground=reinterpret_cast<HBRUSH>(COLOR_WINDOW+1);
     if(!RegisterClassW(&wc)) return 5;
-    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.16 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
+    HWND w=CreateWindowW(wc.lpszClassName,L"PoE2Mouse 0.1.17 - 键鼠设备测试",WS_OVERLAPPEDWINDOW,CW_USEDEFAULT,CW_USEDEFAULT,660,680,nullptr,nullptr,inst,nullptr);
     if(!w) return 5;
     ShowWindow(w,SW_SHOW);MSG msg{};BOOL result_code;
     while((result_code=GetMessageW(&msg,nullptr,0,0))>0) {TranslateMessage(&msg);DispatchMessageW(&msg);}

@@ -40,3 +40,5 @@ Track discovered defects in ISSUE_LOG.md, separate CI evidence from actual devic
 - [ ] Re-arm, disconnect/reconnect, normal/forced exit cleanup in this build.
 - [ ] Compact keyboard: add Ctrl+WASD P2 chords via editor and test press/release order; existing keys latch until released.
 - [ ] Native game compatibility (all P0 game gates remain open).
+
+- [ ] PM-025 external-window setup: no self-check, no external selection, target changes during release wait, held relevant key timeout, successful arm in ordinary allowed external app, F10/focus loss neutral. Actual game compatibility remains distinct.
